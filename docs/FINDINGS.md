@@ -344,7 +344,8 @@ captures the whole swapchain, and the game presents a crop of it.
 
 - swapchain **3840x2160**, crop **0,0 2048x1152**.
 - **100.0%** of the non-black pixels lie inside that 2048x1152 rectangle (789,774 of 789,774 in each of
-  the four original captures), and the content is centred inside it (x 384–1662, y 3–1151).
+  the four original captures), and the crop's own content spans x 384–1662, y 3–1151 — i.e. the picture
+  is laid out inside the crop, centred within it left-to-right, not against the swapchain's corner.
 - `shot` writes the raw texture, so the area outside the crop comes out black. A window or a device sees
   only the crop.
 
