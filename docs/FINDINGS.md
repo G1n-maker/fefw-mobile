@@ -547,6 +547,43 @@ packaged textures: first uploads 2736, re-uploads on pool content change 0, writ
 COMPRESSIBLE change — the changed checks never fire on this title's textures — but the tracking the
 number proves is the mechanism a missing generated-UI layer would depend on.)
 
+### 14i. Reached `Gmap` — and the black screen before it was a transition, not a fault
+
+Driving the opening with an adaptive press plan (A mostly, a `Down` and a `B` cycled in so a cursor that
+ignores A still moves) got further than the plain A loop: the fourth layout loaded.
+
+```
+layout load order: Common -> CommonMenu -> Hub -> Gmap
+```
+
+`Gmap.arc` is the world map — new ground, and proof the engine survives the whole prologue into the
+chapter flow. `Battle.arc`, `Title.arc` and `Ending.arc` were still never opened, so tactical gameplay
+and the title screen remain unreached.
+
+**The `Gmap` transition looks alarming and is not.** At the hand-off the frame is solid black except one
+small circular icon in the bottom-right corner (28,782 non-black pixels, 8,371 colours) — exactly the
+"全屏黑" shape worth being suspicious of. Sampled 2 s later, the same screen holds **557,800 non-black
+pixels and 48,626 colours**, and the pixels *changed* (559,359 of them) between samples. The log explains
+it:
+
+```
+fs open [210.06s] Contents:/Movie/Product/MV00_05.webm
+fs open [210.59s] Contents:/Sound/stream/V_JP/V/JP/MV00/05/V_JP_MV00_05.opus
+[movie] AV1: VideoToolbox decoding 2560x1440, profile 0 level 12
+[codec] image pool 2560x1440 format 2, tiling or mode 2, 1 picture(s): the host keeps the decoded pictures
+```
+
+It is a movie hand-off: the decoder has been initialised, the first picture is in, and the frame arrives
+within two seconds. **No layer is missing** — this is the game's own blue-flame interlude (§14a's frame
+list has it as "a light-figure on a tiled floor"). A black frame between movies is what the game does.
+
+**One detail worth knowing before any audio comparison:** the voice stream is the **Japanese** one —
+`Sound/stream/V_JP/…V_JP_MV00_05.opus` — while the UI is the Chinese `zh-Hans` build. Both voice sets
+ship (`V_JP` 3.2 GB, `V_EN` 2.8 GB) and the host does not choose: it passes `DM_LANG` through
+`oe::GetDesiredLanguage` and the *game* picks the voice track. That matches the series' habit of fixed
+Japanese voice with localised text, and it means a voice check must compare against the Japanese
+original, not the English one.
+
 ### 14f. One `[RED]` line in this path, and it is audio
 
 ```
