@@ -68,7 +68,7 @@ All from the modules as they arrived, no guessing:
 
 | | |
 |---|---|
-| Title ID | `0100??` — read it from `base/exefs/main.npdm` (`nxnative/dm/tools/nso.py` or `pack_ndmp`) |
+| Title ID | `04007EF01F8AE000` — Switch 2 range (`04` prefix), read from `base/exefs/main.npdm` |
 | SDK | **22.2.0** (`SDK MW+Nintendo+NintendoSDK_nnSdk-22_2_0-Release` in `sdk`) |
 | Graphics | **NVN** (`nvnBootstrapLoader` in `main` and `sdk`; no Vulkan, no EGL, no Unity) |
 | Modules | `main`, `rtld`, `sdk`, `subsdk0` (**DLSS 22.2.0**), `subsdk1`, `subsdk2` (**movie 22.2.0**) |
@@ -78,19 +78,26 @@ All from the modules as they arrived, no guessing:
 | RomFS | 28 GB: Sound 8.5, Map 6.6, Movie 6.1, Character 3.1, Effect 1.3, Layout 1.2, Animation 0.5, UI 0.15, Msg 85 MB, Font 47 MB, **Shaders 3 MB** (its own folder, not embedded) |
 | `main` links against | `dlss.nss`, `cuda.nss`, `movie.nss`, `nnSdk.nss` |
 
-Two of those decide the shape of the work: **DLSS**, and **SDK 22.2.0**.
+Two of those decide the shape of the work: **DLSS**, and **SDK 22.2.0**. Both are now settled in the
+game's favour — DLSS arrives through NVN and is served by MetalFX, and 22.2.0 has needed no object-model
+change so far. The measured answers live in [FINDINGS §8a](docs/FINDINGS.md) and [§14](docs/FINDINGS.md).
 
 ## Open questions, in the order they must be answered
 
-1. **Is DLSS on the path the game needs to draw?** `main` names `dlss.nss` and `cuda.nss` among its
-   dependencies and has a `DLSSInput` structure, but it never references `ngx`/`NGX` — so it may only
-   be reaching them through `gfx`. If DLSS is an optional quality setting, the port is ordinary work;
-   if every frame goes through `ngxEvaluate`, Apple silicon cannot run it and this stops here.
-2. **Does anything else need `cuda.nss`?** Same question for the compute side.
+1. **Is DLSS on the path the game needs to draw?** — **Answered: yes, it is, and it is fine.** The game
+   upscales every presented frame (1024x576 → 2048x1152) through **NVN's own `nvnDlss*`**, never through
+   NGX, so `subsdk0`/`cuda.nss` are never called and the host replays the calls on MetalFX's temporal
+   scaler. See [`docs/FINDINGS.md`](docs/FINDINGS.md) §8a. This was the one question that could have
+   ended the project; it is closed.
+2. **Does anything else need `cuda.nss`?** Still open in principle, but the game has now run through its
+   opening without it — including cinematics, dialogue, the world map and character creation — so nothing
+   on that path does.
 3. **What does SDK 22.2.0 change** in NVN objects and service layouts, against the 22.2.0 support that
    exists (EA SPORTS FC 27, Well Dweller)?
-4. **Where are the shaders**, and in what container? `Shaders/` is 3 MB and separate, which is a good
-   sign; the split's readers cover BNSH, GLSLC-in-`main`, and several archives.
+4. **Where are the shaders**, and in what container? — **Answered**: `Shaders/*.bfsha.zst` (zstd-wrapped
+   FSHA); 16,888 shaders split from 252,686 files and all compiled.
 5. **Is 26 MB of `main` text a problem?** Only for reverse engineering time, not for the host.
+6. **Why is the title screen never opened?** `Layout/Title.arc` is in RomFS but has never loaded; the
+   prologue before it is long and not yet driven to the end. See §14c.
 
 `docs/FINDINGS.md` keeps the running answer to each.

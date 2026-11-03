@@ -36,6 +36,12 @@ a software DLSS would not hold a frame rate. Say so in the issue and close the p
 Deliverable: a short section in [FINDINGS.md](FINDINGS.md) §8 replacing the open question with the
 answer and the evidence for it.
 
+**Answered — see [FINDINGS §8a](FINDINGS.md).** The question was framed on a false premise: this title
+reaches DLSS through **NVN's own `nvnDlss*`**, not through NGX, so `subsdk0` and `cuda.nss` are never
+called. Every presented frame *is* upscaled (1024x576 → 2048x1152), but by MetalFX's temporal scaler,
+which the host supplies — so the gate's dead end ("Apple silicon has no Tensor Core") does not apply.
+Continue.
+
 ---
 
 ## Step 1 — Get the host to build and boot it (the bulk of the work)
@@ -136,10 +142,11 @@ Stated plainly, so the project stops early instead of late:
 
 | step | state |
 |---|---|
-| 0 — is DLSS optional? | **not started** — this is the next thing to do |
-| 1 — host boots the game | not started |
-| 2 — playable | not started |
-| 3 — upstream | not started |
+| 0 — is DLSS optional? | **answered: no, and it does not matter** — DLSS is on every drawn frame, but through NVN's own `nvnDlss*`, which the host replays on MetalFX's temporal scaler. `subsdk0`/NGX is never reached. See [FINDINGS §8a](FINDINGS.md) |
+| 1 — host boots the game | **done** — reaches `nnMain`, 60 fps, 0 `[RED]` on the graphics path, cinematic → dialogue → world map → character creation all render |
+| 1b — title screen / main menu | **open** — `Layout/Title.arc` exists but has never been opened; the prologue before it is long. See [FINDINGS §14c](FINDINGS.md) |
+| 2 — playable | not started — needs touch, audio (`nn::audio` is the gap), and the save path exercised |
+| 3 — upstream | one change staged locally (`COMPRESSIBLE`, PR #946's shape); nothing sent yet |
 
 The facts behind every statement above are in [FINDINGS.md](FINDINGS.md), each with how it was
 measured.

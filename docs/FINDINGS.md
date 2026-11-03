@@ -146,6 +146,40 @@ else:
   and there is no software path that would keep 60 fps. That ends the project honestly rather than
   after weeks.
 
+### 8a. Answered: DLSS is on every drawn frame, and it is not NGX
+
+The question above was framed wrongly. `main` never calls NGX because **NVN2 has DLSS inside it**:
+a Switch 2 game builds and evaluates the network through `nvnDlss*`, not through `ngx*`. So the
+`dlss.nss` / `cuda.nss` dependency and the 40 MB `subsdk0` are beside the point — and so is
+"is DLSS optional?", which is answered **no**.
+
+Measured, not inferred:
+
+| evidence | source |
+|---|---|
+| the game names **58 `nvnDlss*` entry points**, including `nvnDlssNetworkBuilderSetMethod`, `…SetPreset`, `…GetStorageSize`, every `nvnDlssParametersSet{InputColor,Depth,MotionVectors,OutputColor,JitterOffset,HistoryReset,PreExposure}`, plus the evaluate call `nvnCommandBufferEvaluateDlss` | string census over `Game/base/exefs/main` |
+| all of those are fetched from the device at init and called: `DeviceGetProcAddress=2205`, and the init pass counts `DlssNetworkBuilder*`, `DlssNetworkFinalize`, `DlssNetworkInitialize` | run log, `[nvn] init 0: …` |
+| the game builds **two** networks before the first frame: `3840x2160, method 2` and `2048x1152, method 0` | run log, `[nvn] DLSS network …` |
+| the presentation is **1024x576 → 2048x1152** through the network, every frame | `[nvn-mtl] DLSS: MetalFX temporal scaler 1024x576 → 2048x1152` |
+| the call sites are real code, not a table: `main+0x1913b48` opens with `sub sp` + `stp` frame saves and `main+0xb70f00` with `d503237f` (paciasp) + frame saves | disassembled from `Game/base/exefs/main`, build `db93b012…` |
+
+**What makes it work anyway:** the host replays `nvnDlss*` on **MetalFX's temporal scaler**
+(`nvn_mtl.m: dlss_eval`), which wants the same inputs — colour, depth, motion vectors at the input
+size, the jitter and a history reset. The picture is therefore *upscaled by Metal's own temporal
+reconstruction*, not by NVIDIA's network. That is why a "DLSS on every frame" title holds 60 fps with
+no Tensor Core: nothing NVIDIA-specific runs.
+
+Two consequences worth keeping:
+
+- **`subsdk0` stays out.** The game reaches DLSS through NVN, so NGX is never called; leaving the module
+  unloaded costs nothing. This is measured, not an assumption: the game has now run for minutes across
+  the opening cinematic, dialogue, the world map and character creation with `subsdk0` absent.
+- **Image quality is MetalFX's, not DLSS's.** Fidelity against the Switch 2 original is a comparison
+  nobody has made yet; the render is 1024x576 upscaled to 2048x1152, so a 2× reconstruction either way.
+
+[PLAN.md](PLAN.md) step 0 is therefore **closed as answered — continue**, and the dead end it guarded
+against does not exist for this title.
+
 ## 9. It boots: the host reaches `nnMain` and survives 15 seconds
 
 `scripts/build_ipa_from_nsp.py` in its `--platform mac` mode, with `Game/base/` as a dump (no keys
@@ -236,3 +270,192 @@ Not measured yet, and each will change the plan when it is:
 
 The whole first build is under 20 minutes on an M5 Ultra — far faster than Cross Rays, because there is
 no extraction (the dump is already unpacked) and no key handling.
+
+## 14. Played in: the opening, and what it proves about the picture (2026-11-04, 02:00–03:00)
+
+Driven with `DM_CTL` (button presses and on-demand screenshots from a file the host polls), not with
+timed `DM_KEYS`, because this game's screens are paced by loading and by how long a person reads them:
+
+```
+[dm] DM_CTL: reading key presses and screenshot requests from …/work/ctl.txt
+[dm] DM_CTL: press 0x1 (hold 0.15 s)          ← "A"
+[dm] DM_CTL: screenshot of the next frame → …/work/shots/x.png
+```
+
+Captures are made with `shot`, which writes the **raw swapchain texture**; the player-visible part is
+the game's own crop inside it (see §14b).
+
+### 14a. All the way through the opening with the picture intact
+
+| screen | result |
+|---|---|
+| auto-save notice (「自动保存」) | renders, Chinese text crisp, waits for A |
+| opening cinematics: date card 「1450/5/1」, wyvern flight, a face in purple mist, a light-figure on a tiled floor | full 3D, fog, particles, bloom, subtitles — **all present** |
+| in-engine dialogue (「芙托娜」, 「苏谛斯」, portraits bottom-left, log / hide-UI / auto-play prompts) | 3D scene + 2D portrait + translucent text box, layered correctly |
+| branch choice box (「询问名字」/「我不认识你」) | renders and accepts A |
+| world map with routes, towns, compass rose | terrain and water textured |
+| character creation (`BODY TYPE SELECT`, TYPE A / TYPE B, BODY/SKIN/HEAD/HAIR/CLOTHES/NAME/CHECK) | models and UI complete |
+| tutorials, save icon, 「正在自动保存。请勿关闭电源。」 | render |
+
+**No missing-texture artefact was found anywhere in that path.** Measured on the frames, not by eye:
+
+- **0 magenta pixels** — the error colour a texture-less draw produces — over the character-creation
+  and dialogue frames (2,359,296 pixels each).
+- Pure black covers **711 of 2,359,296 pixels** (0.03%) in the character-creation frame; there is no
+  large black region standing in for a missing layer.
+- Colour counts in the tens to hundreds of thousands per frame (15,587–341,000 unique colours), i.e. real
+  gradients and photographs, not flats.
+
+So **the `COMPRESSIBLE` fix in [`patches/NEEDED.md`](../patches/NEEDED.md) changes nothing visible here** — and
+the reason is measurable, not lucky. This game sets the flag on *every* texture it builds (`0x8`, or `0x9`
+with `IMAGE`; counted at `nvnTextureBuilderSetFlags`), but the textures the exclusion was skipping are
+**not content at all**:
+
+| texture | size | flags | why the old check skipped it |
+|---|---|---|---|
+| ser=3, ser=1204/1205 | 3840x2160 | `0x9` | COMPRESSIBLE **and** in a `CPU_NO_ACCESS` pool |
+| ser=173/174, ser=1206 | 2048x1152 | `0x8` | same |
+
+Those are the swapchain and the DLSS input/output render targets — full screen, GPU-only, nothing for the
+CPU to upload. So the old `COMPRESSIBLE` test never fired on a texture that had content waiting.
+
+Confirmed by an A/B on the identical screen: with the fix applied the frame differs from the baseline by
+**660 of 2,359,296 pixels**, and every one of them is the save spinner's ring; with the tree cleaned up
+again, **521 pixels**, the same spinner. There is no hidden layer to recover on these screens.
+
+The fix is still applied in `nxnative/` because the order of the checks is wrong on its own terms —
+`COMPRESSIBLE` is a memory-compression hint, not a data format, and it should only suppress the fill when
+the pool is one the CPU cannot write, which the code now tests directly. That is upstream PR #946's
+change, it is harmless here, and it removes a trap for a later screen (a CPU-written texture that *does*
+carry the flag would otherwise come out empty). If a missing layer ever does appear, this is no longer the
+first suspect: look at `tex_flush_upload` and the pool flags instead.
+
+### 14b. The "UI in the top-left corner" is the game's crop, not a layout bug
+
+The screenshots look like the UI sits in the top-left quadrant of a black screen. It does not: the host
+captures the whole swapchain, and the game presents a crop of it.
+
+```
+[dm] [nvn] WindowInitialize swap chain 2 textures, interval 1, first 3840x2160 format 0x3d
+[dm] [nvn] WindowCrop 0,0 2048x1152
+[dm] [nvn] WindowInitialize swap chain 2 textures, interval 1, first 3840x2160 format 0x38
+[dm] [nvn] WindowCrop 0,0 2048x1152
+```
+
+- swapchain **3840x2160**, crop **0,0 2048x1152**.
+- **100.0%** of the non-black pixels lie inside that 2048x1152 rectangle (789,774 of 789,774 in each of
+  the four original captures), and the content is centred inside it (x 384–1662, y 3–1151).
+- `shot` writes the raw texture, so the area outside the crop comes out black. A window or a device sees
+  only the crop.
+
+This is the same shape as Link's Awakening cropping its layer, and needs no fix. It does mean **a
+screenshot is not what the player sees**: for any comparison, crop to `0,0 2048x1152` first, or capture
+through the present pass with `DM_NVN_SHOT_OUT=2048x1152`.
+
+### 14c. The title screen was not reached, and why
+
+`Layout/Title.arc` (734 KB, a SARC holding `blyt/Title_TopMenu.bflyt`,
+`Title_ModeSelect_MenuItem.bflyt`, `Title_Out.bflan`, …) **exists in RomFS but is never opened**: zero
+`Contents:/Layout/Title.arc` in the log of any run, including one that pressed A 130 times over four
+minutes. Only `Common.arc`, `CommonMenu.arc` and `Hub.arc` load.
+
+This is not a rendering fault. The game begins with a long unskippable prologue — the date card, the
+cinematic, the first chapter's dialogue, character creation, tutorials — and reaching the title needs
+that finished, which takes far longer than mashing A at 1.5 s intervals (the dialogue needs the text
+to finish revealing, and choices need the cursor moved). **The title screen is still open work**;
+it needs either a longer scripted route or a save that starts past the prologue.
+
+Two facts make the route checkable rather than blind:
+
+- the game reads `save:/000/Global` and `save:/000/Auto` at mount and, with a fresh save, does not
+  find them (`fs path not found: save:/000/Global`, `…/Auto`) — so "a save exists" is a signal the
+  prologue was passed, and it has never appeared;
+- no save file has been written in any run so far (§14d).
+
+### 14d. No save has been written yet — and that is not a host bug
+
+Every run so far, including one with `DM_FS=1` (`fs` logs opens, misses and read totals) and one with a
+scratch `DM_SAVE`:
+
+```
+commit/ : (empty)
+commit.work/ : (empty)
+```
+
+The save mount is in place — `fs mount save: → …/save.work (transactional save: work directory, swapped
+in atomically on Commit)` — and the game *reads* it, but no `CreateFile`, `WriteFile` or `Commit`
+happens. The host side was checked rather than assumed:
+
+- `main` imports the whole write path: `_ZN2nn2fs10CreateFileEPKcl`, `…9WriteFile…WriteOptionE`,
+  `…6CommitEPKc`, `…9FlushFile`, `…11SetFileSize`, `…15CreateDirectory`. (Read from main's dynamic
+  symbol table: 931 symbols, 27 of them `nn::fs`. `sdk` imports no `nn::fs` at all — its 1,478 are
+  definitions.)
+- each of those has a hook, including `Commit(PKc)`, `Commit(PKc, CommitOption)`, `Commit(PKPKci)` and
+  the SDK 11 `CommitSaveData(PKc)`.
+
+**The "Saving..." on the auto-save panel is part of the artwork.** Two things say so, and both are
+observable rather than inferred:
+
+- it is the only English text on a screen that is otherwise entirely Chinese — the game is running
+  `DM_LANG=zh-Hans`, and a live status string would have been localised like everything around it;
+- nothing was written while it span: no file in `commit/` or `commit.work/`, no `save:` open with a
+  write mode, and the panel sits still for as long as you leave it (45,300 frames in §14e).
+
+So the screen is a tutorial *explaining* auto-save, and the first real save comes later. Consistent
+with §14c: `save:/000/Global` and `save:/000/Auto` are still missing, so the prologue has not been
+passed. What to watch for, when a run does save: a non-empty `commit/`, and
+`[dm] fs open … save:/…` with the mode's write bit set.
+
+### 14e. Memory holds flat when the scene does — and grows with what is loaded
+
+Two different questions, measured apart.
+
+**While the picture is still, memory is flat.** One run sat on the auto-save notice for **45,300 frames**
+(about 12 minutes at 60 fps), which is a real soak rather than a spot check:
+
+```
+memory up to frame   300: resident 3353 MB, GPU allocated 3447 MB, residency set 3118, serial objects 3004, memory pools 333
+memory up to frame  3300: resident 3364 MB, GPU allocated 3451 MB, residency set 3119, serial objects 3004, memory pools 333
+memory up to frame 45300: resident 3397 MB, GPU allocated 3451 MB, residency set 3119, serial objects 3004, memory pools 333
+```
+
++44 MB over 45,000 frames (1.3%), and the object counts that would show a leak — residency set, serial
+objects, pool count — do not move at all (3118→3119, 3004→3004, 333→333). **No leak on a static screen.**
+
+**Across scenes, the footprint rises with what is loaded**, which is what a port that keeps every
+texture it has uploaded does:
+
+| point | footprint |
+|---|---|
+| menus / first screens | 3,390 MiB |
+| after the opening cinematic | 4,959 MiB |
+| character creation | 6,747–6,806 MiB |
+
+It is still open whether it comes back down when a scene is released, and whether the game stays under
+the 9 GB application pool once real gameplay starts — 6.8 GB is already in use before the prologue ends.
+That is PLAN step 5, and this is the baseline to measure it against.
+
+### 14f. One `[RED]` line in this path, and it is audio
+
+```
+[dm] audren: command headers in the SDK 21 layout (no magic: +0 enabled, +1 command ID, +2 size), DeviceSink 0x140 bytes
+[dm] [RED] audren: no DeviceSink (ID 0x14) in the command list, 0 commands of 0x140 bytes: the game will have no sound
+```
+
+The game's audio command list has no DeviceSink command, so the host cannot find the sink object. This
+matches the known-largest gap (`nn::audio`, 212 imports, §6) and belongs to PLAN step 3; it is recorded
+here because it is the only `[RED]` the picture path produced, and it is not a graphics problem.
+
+One graphics `[RED]` was seen once, on a frame that compiled 8 new pipelines and uploaded 672 textures:
+
+```
+[dm] [nvn-mtl] [RED] stage 1 cb4 has no uniform buffer bound
+[dm] [longframe] frame 9030 (154.28 s) … new pipelines 8 + shader libraries 0, 56.3 ms in all; texture uploads 672 first …
+```
+
+It is `RED_ONCE(16)` in `nvn_mtl.m`'s binding path: the shader reads constant buffer 4, the game has not
+bound one there, and the host substitutes the all-zero bank (as an unbound texture slot reads 0). No
+picture defect was visible on those frames. **Open**: whether the game expects a buffer there and the
+bind was dropped, or the shader legitimately reads an unbound slot. Worth one pass with
+`DM_NVN_PASSDUMP` on that shader if a visual fault ever appears near those draws.
+
