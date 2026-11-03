@@ -16,12 +16,10 @@ patch from the tree and keep it here.
 
 ## Needed now
 
-### 1. `COMPRESSIBLE` must not exclude a texture in a pool the CPU writes
+### 1. `COMPRESSIBLE` must not exclude a texture in a pool the CPU writes — **applied; measured as no-op on the screens reached**
 
 Two places, both in the host. This is
 [PR #946](https://github.com/seedds/nxnative/pull/946), still open; until it lands, apply it here.
-
-**`nxnative/dm/gfx/nvn/nvn_mtl.m`, `tex_init_fill`** — move the check after the pool is known:
 
 ```c
     if (t->d.samples > 1 || ((int)mt.pixelFormat >= 250 && (int)mt.pixelFormat <= 262)) return 0;
@@ -37,10 +35,21 @@ Two places, both in the host. This is
         (t->d.flags & (NVN_TEXTURE_FLAGS_LINEAR | NVN_TEXTURE_FLAGS_LINEAR_RENDER_TARGET))) return;
 ```
 
-**Why this is day one for an SDK 22 title:** the flag is a Switch memory-compression hint, not a data
+**Why it is day one for an SDK 22 title:** the flag is a Switch memory-compression hint, not a data
 format. A game that sets it on every texture draws nothing without this (`tex_init_fill`), and then
 draws everything except UI panels generated after creation (`ft_add`). Both symptoms were met on Cross
 Rays; a newer SDK setting it more often is the likelier case, not the rarer one.
+
+**What it actually did here (2026-11-04):** the premise holds — this game sets the flag on **every**
+texture it builds (`0x8`, or `0x9` with `IMAGE`) — but **the picture does not change**. The only
+`COMPRESSIBLE` textures are full-size render targets in `CPU_NO_ACCESS` pools (3840x2160 and 2048x1152,
+i.e. the swapchain and the DLSS input/output), so the old check never suppressed a texture that had
+content to upload. A/B on the same screen: 660 of 2,359,296 pixels differ, all of them the save
+spinner. Detail in [../docs/FINDINGS.md](../docs/FINDINGS.md) §14a.
+
+Applied anyway: the check's order is wrong on its own terms, and it removes a trap for a later screen
+that does write a `COMPRESSIBLE` texture from the CPU. Do not treat a missing layer as this bug again —
+look at `tex_flush_upload` and the pool flags first.
 
 ### 2. Full screen (`present_fill`)
 
@@ -77,3 +86,8 @@ cd nxnative && git diff > ../patches/fefw-host-changes.patch
 
 and record in [../docs/FINDINGS.md](../docs/FINDINGS.md) what each change fixed here, with the log line
 that showed it.
+
+**State now:** item 1 is applied and saved as [`fefw-host-changes.patch`](fefw-host-changes.patch)
+(37 lines, `hle_nvn.c` and `nvn_mtl.m` only). Items 2 and 3 are untouched — item 2 (`present_fill`)
+only matters once the phone's aspect ratio is in play, and item 3 is an iOS-only cosmetic change. The
+list is not empty yet, so the "generate the patch and keep it here" step applies to item 1 alone.
