@@ -102,8 +102,13 @@ main imports: 898
 | `nn::hid` | 47 | | `nn::fontll` | 21 |
 | `nn::codec` | 34 | | `nn::vi` | 10 |
 
-`nn::audio` at 212 is the largest single gap and is expected for a game with this much voice work
-(8.5 GB of Sound). `nn::prepo` (26) is Nintendo's own asset pipeline and appears in games that use it.
+`nn::audio` at 212 is the largest single gap by import count, and is expected for a game with this much
+voice work (8.5 GB of Sound). **But it is not a functional gap** — see [§14f](FINDINGS.md): the host's
+`AudioRenderer` CPU path opens, starts and renders this game's mix to correct stereo PCM (30.8 MB in
+160 s, −6.6 dBFS peak, 0 underruns, 0 `[RED]`), and 204 of the 212 imports need no host hook at all
+because the game's own `sdk` exports them. What the count really measures is *coverage*: whether every
+sound the game asks for comes out, which is unmeasured. `nn::prepo` (26) is Nintendo's own asset
+pipeline and appears in games that use it.
 
 ## 7. RomFS: 28 GB, and the shaders are their own folder
 
@@ -407,12 +412,12 @@ with §14c: `save:/000/Global` and `save:/000/Auto` are still missing, so the pr
 passed. What to watch for, when a run does save: a non-empty `commit/`, and
 `[dm] fs open … save:/…` with the mode's write bit set.
 
-### 14e. Memory holds flat when the scene does — and grows with what is loaded
+### 14e. Memory: flat once a scene settles, no leak over a 10-minute soak
 
-Two different questions, measured apart.
+Three measurements, each doing a different job.
 
-**While the picture is still, memory is flat.** One run sat on the auto-save notice for **45,300 frames**
-(about 12 minutes at 60 fps), which is a real soak rather than a spot check:
+**1. Still screen, long dwell.** One run sat on the auto-save notice for **45,300 frames** (about 12
+minutes at 60 fps):
 
 ```
 memory up to frame   300: resident 3353 MB, GPU allocated 3447 MB, residency set 3118, serial objects 3004, memory pools 333
@@ -420,21 +425,127 @@ memory up to frame  3300: resident 3364 MB, GPU allocated 3451 MB, residency set
 memory up to frame 45300: resident 3397 MB, GPU allocated 3451 MB, residency set 3119, serial objects 3004, memory pools 333
 ```
 
-+44 MB over 45,000 frames (1.3%), and the object counts that would show a leak — residency set, serial
-objects, pool count — do not move at all (3118→3119, 3004→3004, 333→333). **No leak on a static screen.**
++44 MB over 45,000 frames (1.3%), with residency set, serial objects and pool count not moving at all.
 
-**Across scenes, the footprint rises with what is loaded**, which is what a port that keeps every
-texture it has uploaded does:
+**2. Ten minutes while the game keeps advancing** (A every 2 s, so scenes load — the case where a leak
+would show). Resident memory climbs while scenes load and then **stops dead**:
 
-| point | footprint |
+| frame | resident |
 |---|---|
-| menus / first screens | 3,390 MiB |
-| after the opening cinematic | 4,959 MiB |
-| character creation | 6,747–6,806 MiB |
+| 300 | 3,376 MB |
+| 10,200 | 3,732 MB |
+| 12,300 | 5,716 MB |
+| 16,200 | 6,162 MB |
+| 21,300 | 6,683 MB |
+| 27,300 | **6,645 MB** |
+| 30,300 | **6,645 MB** |
+| 33,300 | **6,645 MB** |
+| 36,300 | **6,645 MB** |
 
-It is still open whether it comes back down when a scene is released, and whether the game stays under
-the 9 GB application pool once real gameplay starts — 6.8 GB is already in use before the prologue ends.
-That is PLAN step 5, and this is the baseline to measure it against.
+The last four samples span **9,000 frames (2.5 minutes) with an identical resident figure to the
+megabyte**, and the counters behind it are frozen too — residency set 4,991, serial objects 4,324,
+memory pools 561, all unchanged from frame 27,300 on. **This is not a leak**: it is the loaded set, and
+it stops growing once the game stops loading new scenes.
+
+The plateau is *high* (6.6 GB of the profile's 9 GB application pool) because the port keeps every
+texture a scene touched. That is the real risk for iPhone, and it is a policy question — releasing
+textures on scene change — not a leak to fix.
+
+A note on the measuring tool: a straight-line fit over the whole run reports "GROWS, +114 MiB/min",
+because it averages in the ramp while scenes load. Fit the plateau, not the ramp; the plateau is the
+question.
+
+**3. Across scenes, the footprint rises with what is loaded**, which is what the table above shows:
+3,390 MiB (menus) → 4,959 MiB (after the opening cinematic) → 6,747 MiB (character creation).
+
+### 14f. Audio works: real BGM, no underruns
+
+The first sessions ran `DM_AUDIO=0`, which on the Mac means the **silent sink** — the game's audio was
+mixed correctly but discarded, so "no sound" then said nothing about audio support. With
+`DM_AUDIO=1` and `DM_AUDIO_DUMP` writing every PCM block the game appends, measured over 160 s:
+
+```
+audren: rendered 24000 frames, 13492 of them not silent
+audio #0 device callbacks 32000: 240–240 frames each, 4.0 blocks queued on average at callback; in these 2000, 0 underruns, 0.0 ms zero-padded
+```
+
+| measurement | value |
+|---|---|
+| PCM written | 30,818,304 bytes = 7,704,576 frames = **160.5 s** stereo at 48 kHz |
+| peak | 15,414 of 32,767 (**−6.6 dBFS**) |
+| rms | 1,011 (**−30.2 dBFS**) |
+| frames above −54 dBFS | 4,836,000 of 7,704,576 (**62.8%**) |
+| longest sustained loud stretch | **43.8 s** |
+| underruns | **0**, 0.0 ms zero-padded |
+| `[RED]` lines | **0** |
+
+It is music, not noise or stuck DC — the spectrum of the loudest second shows harmonics over a
+~23.4 Hz fundamental (47, 70, 94…), a **spectral flatness of 0.151** (white noise is ~1.0), and DC
+holding only 1.1% of the energy.
+
+**So the 212 `nn::audio` imports are not the gap they looked like.** 204 of them have no host hook, but
+they resolve inside the game's own `sdk`, which exports them — the host never has to provide them. What
+the host does provide is the thing this game actually calls: the `AudioRenderer` CPU path (open, start,
+update, voice/effect nodes, `DeviceSink`), and that path produces correct stereo mixdown.
+
+What is still unknown is *coverage*, not function: whether every sound the game asks for is heard. That
+needs either `DM_AUDIO_DUMP` comparisons against the Switch 2 original, or a listen along a scripted
+route.
+
+### 14g. Two `[RED]` findings, with their status
+
+**Audio: `no DeviceSink` — seen once, in an early run.** One session logged
+
+```
+[dm] [RED] audren: no DeviceSink (ID 0x14) in the command list, 0 commands of 0x140 bytes: the game will have no sound
+```
+
+on a first command list of **8** commands with no ID 20 in the histogram. Every later session shows
+**9** commands including `20×1`, finds the sink, and renders. The host already has a fallback for a
+sink of an unexpected size (`the only 0x148-byte command is ID %#x, taking it as DeviceSink`), and the
+first list may simply have been generated before the game's first update. **Status: open, low
+priority** — it has not reproduced in any run since, and when it did occur the audio *renderer* still
+initialised. Worth a second look only if a run goes silent.
+
+**Graphics: `stage 1 cb4 has no uniform buffer bound` — reproducible in deeper scenes.** It appears in
+the runs that get past the opening (character creation and beyond) and not in the ones that sit on a
+menu. It now names its shader (the message was extended to do so):
+
+```
+[dm] [nvn-mtl] [RED] stage 1 cb4 has no uniform buffer bound (shader 300c5dd0fd84cf79_b, 28 bindings)
+```
+
+That shader is a **particle effect**: `shader_map.tsv` line 7340 maps key `300c5dd0fd84cf79` to
+`ps_effect.bin 2963 pixel /Effect/Particle/FieldBtl200.ptcl.zst#BNSH@0x161000#var2` — a battlefield
+effect, `var2` variant. The host substitutes the all-zero bank and continues, as it does for an unbound
+texture slot; no picture defect was found on the frames it appears on (no magenta, no visible artefact
+in §14a's checks).
+
+Two candidate causes, not yet separated:
+
+1. **the game relies on stale binding state** — NVN constant-buffer bindings persist across draws, and
+   the host models that (`S.ubo` only changes on a real bind command), so if the game never binds cb4
+   for this draw it would be reading whatever the previous draw left. The host's zero bank is then the
+   *wrong* stand-in, and the fix is to reuse the previous binding rather than zero it;
+2. **the host drops a bind** — the game does bind cb4, and the binding is lost between the bind and the
+   draw (a pass split, a deferred update, or replayed command ordering).
+
+Separating them needs `DM_NVN_PASSDUMP` on a run that reaches a particle effect, reading whether a
+`B … st1 cb reg4` line exists before the draw that reports the miss. **Status: open**, with the shader
+and the asset path now recorded so the next session starts from here.
+
+### 14h. `write-protection faults` is not zero, and that is correct
+
+The check suggested for verifying the `COMPRESSIBLE` change was that write-protection faults should be
+non-zero, i.e. that textures the CPU writes are being tracked and re-uploaded:
+
+```
+packaged textures: first uploads 2736, re-uploads on pool content change 0, writes beside a texture only (not re-uploaded) 54901; write-protection faults 54901, pages unprotected before host writes 0; missed 0 (cumulative)
+```
+
+**54,901 faults, 0 missed.** The path is live. (As §14a records, that is not *because* of the
+COMPRESSIBLE change — the changed checks never fire on this title's textures — but the tracking the
+number proves is the mechanism a missing generated-UI layer would depend on.)
 
 ### 14f. One `[RED]` line in this path, and it is audio
 
