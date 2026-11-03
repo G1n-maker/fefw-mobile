@@ -1,0 +1,40 @@
+# ---- Game files and keys: never committed ----
+# The game arrived as an unpacked dump. Everything under these is its content.
+FEIYALAIDE/
+Game/
+*.xci
+*.nsp
+*.nsz
+*.xcz
+prod.keys
+title.keys
+*.keys
+*.nca
+*.tik
+
+# ---- Build output ----
+# Extraction, patched modules, shader packages, caches, run folders, and the host itself.
+work/
+nxnative/
+.tools/
+.venv/
+*.ipa
+*.app
+*.xcarchive
+xcode-derived-data/
+xcode-out/
+
+# ---- Logs and temporary ----
+logs_*.txt
+logs/
+*.log
+tmp/
+*.bin
+*.img
+
+# ---- System and editors ----
+.DS_Store
+*.swp
+*~
+.vscode/
+.idea/
