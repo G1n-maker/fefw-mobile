@@ -148,6 +148,7 @@ Stated plainly, so the project stops early instead of late:
 | 1c — title screen / main menu | **open** — `Layout/Title.arc` exists but has never been opened; it sits behind more of the chapter than a drive with A/B/stick reaches. See [FINDINGS §14c](FINDINGS.md) |
 | 2 — audio | **works** — real BGM to 48 kHz stereo: −6.6 dBFS peak, 0 underruns, 0 `[RED]`, verified as music by spectrum. Coverage (is every sound heard?) is unmeasured. See [FINDINGS §14f](FINDINGS.md) |
 | 2b — memory stability | **no leak** — flat at 6,645 MB across 9,000 frames in a 10-minute soak; the plateau is high (6.6 GB of 9 GB) because loaded textures are kept. See [FINDINGS §14e](FINDINGS.md) |
+| 2c — frame rate | **60 held on menus and dialogue; not on the prologue's movies** — at frame 3300 (movies start) the main thread + `MovieVideoHandler` need 21 ms a frame, while GPU is 0.8 ms. The game's own 30 is flat all the way through. See [FINDINGS §14j](FINDINGS.md) |
 | 2c — touch | not started (Mac first; iOS front end untouched) |
 | 2d — packaging | not started — 27 GB RomFS goes over separately, never in the IPA |
 | 3 — upstream | one change staged locally (`COMPRESSIBLE`, PR #946's shape), saved as `patches/fefw-host-changes.patch`; nothing sent yet |

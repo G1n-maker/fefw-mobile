@@ -525,7 +525,7 @@ This section originally listed two candidate causes — the game relying on stal
 host dropping a bind. **The second is ruled out by upstream**, which has the exact symptom documented in
 [An unbound uniform slot reads the zero bank](https://github.com/seedds/nxnative/blob/main/docs/reference/rendering.md#an-unbound-uniform-slot-reads-the-zero-bank):
 "the game draws with nothing bound there; **the host misses no bind**". The zero bank is the intended
-stand-in and is present in this tree. See §14j.
+stand-in and is present in this tree. See §14k.
 
 **Status: not a defect.** The one thing still genuinely unknown is what the Switch reads from an
 unbound slot, which upstream also records as unknown; if a particle ever looks wrong here, that is the
@@ -581,7 +581,61 @@ ship (`V_JP` 3.2 GB, `V_EN` 2.8 GB) and the host does not choose: it passes `DM_
 Japanese voice with localised text, and it means a voice check must compare against the Japanese
 original, not the English one.
 
-### 14j. What upstream and the sibling forks already know (surveyed 2026-11-04)
+### 14j. `fps_target`: 60 works, but the prologue's movies do not hold it
+
+The profile raises this game's own frame rate. That is legal and deliberate — the host's own note says
+`gxc` holds the target at `+0x1dc` and "at 60 the game asks for interval 1 and steps by 1.0 a frame" —
+but it is worth knowing what it costs. Both runs use the same press route; only `DM_FPS_TARGET` differs.
+
+| | `fps_target 30` (the game's own) | `fps_target 60` |
+|---|---|---|
+| frame time p50 | **33.31 → 33.34 ms**, flat | 16.66 ms → **21.18 ms** after frame 3300 |
+| frame time p95 | 33.61 ms | 17.04 → **23.25 ms** |
+| measured fps | 30.0, stable | 60.0, then frames take 21 ms |
+| present interval | `1 → 2` once | `1 → 2`, `2 → 1` |
+| `[RED]` | 0 | 0 |
+
+**30 fps is rock steady through the same frames; 60 fps degrades at frame 3300 and stays degraded.**
+The breakdown says it is not the renderer:
+
+```
+[longframe] frame 3300 (55.51 s) whole frame 23.2 ms, submit+present 0.3 ms, GPU 0.8 ms; new pipelines 0 …
+threads up to frame 6900: top: 'main thread' 218 ms/s, 'MovieVideoHandler' 16 ms/s
+```
+
+GPU 0.8 ms and submit+present 0.3 ms out of a 23.2 ms frame: the time is the **main thread and the movie
+decoder**, not Metal. `MovieVideoHandler` is active, so frame 3300 is where the opening's movies start —
+at 60 fps the main thread needs 21.8% of every 16.67 ms budget for work that fit in 32% of a 33.33 ms
+budget at 30 fps, and it misses.
+
+**What this does and does not mean.** It does not say 60 fps is wrong for this game: 60 held perfectly on
+every menu and dialogue screen measured (§14a), and 30 does not exercise the extra headroom at all. It
+says **the prologue's video playback is not a 60 fps workload on this host**, and that a claim of "60 fps"
+needs to be qualified by scene. The measured answer for gameplay — the 30 fps the game itself picks for
+battles — is not in yet, because battles are not reachable (§14i).
+
+Practical consequence for the Mac target: leave `fps_target 60` (menus and dialogue genuinely benefit,
+and it is what the earlier 60 fps verification measured), and do not treat a 21 ms frame during a
+cutscene as a regression. If battles turn out to be the game's own 30, the honest setting there is the
+game's choice, not a forced 60.
+
+**A correction to §14k.** The paragraph there named `nxnative-fc26-120fps` as "another SDK 22.2.0 title".
+It is not: that patch builds on **EA SPORTS FC 26, SDK 19.3.3** (title `01004FF021942000`, engine
+`65501fbb`). The real SDK 22.2.0 neighbours are **EA SPORTS FC 27** (`0100C49025D3E000`, "SDK 22.2.0, NVN
+in the renderer NRO") and **Well Dweller** (`0100217023F6C000`, same `sdk` build hash `fed212d6…` as FC
+27). Checked against ours:
+
+| FC 27 setting | why FC 27 needs it | this title |
+|---|---|---|
+| `shader_key_skip 0x7d0+0x18` | its renderer keeps one control section per hash that ignores GLSLC's compile information, so later shaders' bytes name another shader | **not needed** — our `shader_map.tsv.conflicts.tsv` is empty (`# … conflict rulings: empty`), i.e. no two shaders collided on a key |
+| `present_interval display` | the game asks for interval 2, which display pacing ignores | **not applied** — ours runs `game` mode and the game's own 1↔2 flips are meaningful (§14j); worth an A/B only if frame pacing is ever the complaint |
+| `mem_alias 0x150000000` (5.25 GB) | Frostbite reserves 264 address regions and runs past 4.38 GB | **not applicable** — different allocator; ours reaches alias +36 GB only through StandardAllocator regions, which the host fits (§9c) |
+
+The SDK 22 object-model question (AGENTS.md open question 3) stays open, but it is now scoped: both real
+22.2.0 titles share one `sdk` hash and neither needed an object-size change beyond the node-area rule in
+`dm/tools/sdk_patches.py`.
+
+### 14k. What upstream and the sibling forks already know (surveyed 2026-11-04)
 
 The `nxnative` ecosystem turned out to hold the answers to three of the open items. Read before
 re-deriving anything here.

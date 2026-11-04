@@ -69,15 +69,16 @@ neighbours to read first:
 
 - `dm/games/040074A01BF12000/` — **Donkey Kong Bananza**, upstream's one shipped Switch 2 profile, with a
   step-by-step bring-up README. Same generation, same dump-folder packing.
-- `imnotsharingmyname/nxnative-fc26-120fps` — another **SDK 22.2.0** title, i.e. the same SDK generation,
-  so its profile is the nearest reference for SDK 22 object layouts.
+- `dm/games/0100C49025D3E000/` — **EA SPORTS FC 27**, the real **SDK 22.2.0** neighbour (and
+  `0100217023F6C000` Well Dweller shares its `sdk` hash). Nearest reference for SDK 22 object layouts.
+  Note: `nxnative-fc26-120fps` is *not* this generation — it builds on FC 26, SDK 19.3.3.
 - `robldctrl/nxnative-pokopia` — the other Switch 2 fork; its Ampere translator fixes are the subsystem
   this title's 16,888 shaders go through.
 - `ltomo2/nxnative-tv-builder` — BC texture fallback and per-game memory adapters, which matter for the
   iPhone target before packaging.
 
-[FINDINGS §14j](docs/FINDINGS.md) records which of DKB's settings this title does and does not need, each
-with the measurement.
+[FINDINGS §14k](docs/FINDINGS.md) records which of DKB's and FC 27's settings this title does and does not
+need, each with the measurement.
 
 ## Facts established before any code was written
 
