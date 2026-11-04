@@ -77,8 +77,10 @@ neighbours to read first:
 - `ltomo2/nxnative-tv-builder` — BC texture fallback and per-game memory adapters, which matter for the
   iPhone target before packaging.
 
-[FINDINGS §14k](docs/FINDINGS.md) records which of DKB's and FC 27's settings this title does and does not
-need, each with the measurement.
+[FINDINGS §14m](docs/FINDINGS.md) records which of DKB's and FC 27's settings this title does and does not
+need, each with the measurement. [§14k](docs/FINDINGS.md) has the full route into a battle, including the
+two things that block a naive drive: the name field needs `DM_KBD`, and the body-type page needs a
+direction before `A`.
 
 ## Facts established before any code was written
 

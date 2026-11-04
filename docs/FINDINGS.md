@@ -567,7 +567,7 @@ This section originally listed two candidate causes — the game relying on stal
 host dropping a bind. **The second is ruled out by upstream**, which has the exact symptom documented in
 [An unbound uniform slot reads the zero bank](https://github.com/seedds/nxnative/blob/main/docs/reference/rendering.md#an-unbound-uniform-slot-reads-the-zero-bank):
 "the game draws with nothing bound there; **the host misses no bind**". The zero bank is the intended
-stand-in and is present in this tree. See §14k.
+stand-in and is present in this tree. See §14m.
 
 **Status: not a defect.** The one thing still genuinely unknown is what the Switch reads from an
 unbound slot, which upstream also records as unknown; if a particle ever looks wrong here, that is the
@@ -661,7 +661,7 @@ and it is what the earlier 60 fps verification measured), and do not treat a 21 
 cutscene as a regression. If battles turn out to be the game's own 30, the honest setting there is the
 game's choice, not a forced 60.
 
-**A correction to §14k.** The paragraph there named `nxnative-fc26-120fps` as "another SDK 22.2.0 title".
+**A correction to §14m.** The paragraph there named `nxnative-fc26-120fps` as "another SDK 22.2.0 title".
 It is not: that patch builds on **EA SPORTS FC 26, SDK 19.3.3** (title `01004FF021942000`, engine
 `65501fbb`). The real SDK 22.2.0 neighbours are **EA SPORTS FC 27** (`0100C49025D3E000`, "SDK 22.2.0, NVN
 in the renderer NRO") and **Well Dweller** (`0100217023F6C000`, same `sdk` build hash `fed212d6…` as FC
@@ -677,7 +677,90 @@ The SDK 22 object-model question (AGENTS.md open question 3) stays open, but it 
 22.2.0 titles share one `sdk` hash and neither needed an object-size change beyond the node-area rule in
 `dm/tools/sdk_patches.py`.
 
-### 14k. What upstream and the sibling forks already know (surveyed 2026-11-04)
+### 14k. Into the battle: the whole flow runs, at 60 fps with 1,024 draws a frame
+
+The blocker in §14c was not the game. It was **one environment variable**: the character name is entered
+through the system software keyboard, and on the Mac with no input window the host answers it as
+*cancel*:
+
+```
+swkbd: title '请决定名字（无法使用的文字会于游戏内显示为■）' initial '' limit 8 min 0 → no window, treated as cancel
+```
+
+so the name could never be set and the flow could never leave NAME. The host already supports answering
+it — `DM_KBD=<text>` returns that text as OK — and with it set:
+
+```
+swkbd: title '请决定名字（无法使用的文字会于游戏内显示为■）' initial '' limit 8 min 0 → OK 'Zephyr'
+```
+
+Two more things were needed to drive it, both worth recording because neither is obvious:
+
+- **`A` alone does not advance the body-type page.** It needs a direction first (`Left` then `A` moved
+  BODY → SKIN). Every later page advances on `A` alone.
+- **presses sent during dialogue are consumed by the dialogue.** Arriving at `UnitMake` and immediately
+  pressing 60 times leaves the screen on BODY; the same session advanced to SKIN on the *first* `A`
+  once the intro dialogue had settled.
+
+**Result: the full flow runs.** Layout order, all seven archives, ending in gameplay:
+
+```
+Common -> CommonMenu -> Hub -> Gmap -> Title -> UnitMake -> Battle
+```
+
+[`docs/images/battle-training.png`](../images/battle-training.png) is the tactical map:
+
+- the status panel reads **`Zephyr` Lv 1, `HP 30/30`, `物攻 22`, `命中 109`, `耐物 9`, `耐魔 10`,
+  武器「木制枪」** — the injected name, proving the `DM_KBD` path end to end;
+- the blue movement grid and the red semi-transparent danger zone are drawn over the 3D plaza;
+- the mini-map, `回避 0%`, `[ZL] 切换危险范围` and `[ZR] 环境设定` are all present;
+- the world underneath is the town square with market awnings, planters, carts and soft shadows.
+
+**And it holds 60 fps where it matters.** The battle's own numbers, at 1,024 draws a frame (vs ~50 in the
+menus):
+
+| metric | battle |
+|---|---|
+| frame time p50 | **16.66 → 16.68 ms** |
+| frame time p95 | **16.94 ms** (0.3 ms above p50) |
+| GPU p50 | 6.53 → **7.51 ms** (p95 8.50) |
+| draws per frame | **1,024** |
+
+GPU uses 7.5 ms of a 16.67 ms budget — roughly half the frame still spare — and p95 sits 0.3 ms above
+p50, i.e. no stutter. **This answers §14j's open question**: the 21 ms frames there were the
+*prologue's movies*, not the game. Gameplay at 60 fps is not a compromise; it is comfortable.
+
+So the earlier "60 works on menus but not on the prologue's movies" stands as measured, and the
+conclusion for the Mac target is now complete: **keep `fps_target 60`.** It is flat in menus, flat in
+battle, and only the cutscene decode is short of budget — which is a decoder/thread question, not a
+graphics one, and affects a scene type that is not what the port is being judged on.
+
+**One thing this does not yet claim.** Reaching the map with a unit selected and a move grid drawn is
+"the battle UI and the 3D board render correctly at 60 fps". It is not "a full turn was played": selecting
+a unit, moving it, confirming an attack and watching combat resolve — and the `Effect/Particle` shaders
+that fire there, including the `cb4` one from §14g — are the next thing to exercise, and the parked
+session is the way to do it without re-running the 5-minute drive.
+
+### 14l. The driving tools that made this reachable, kept in `work/`
+
+Everything under `work/` is throwaway by design, but these were the difference between "cannot reach the
+title" and "in a battle" and are worth rebuilding rather than rediscovering:
+
+| script | what it does |
+|---|---|
+| `work/park.py` | starts a detached host, drives it to `UnitMake`, and **leaves it running**, so the next step costs a second instead of five minutes |
+| `work/ctlp.py` | sends one `key` or one `shot` to that parked session — the `DM_CTL` "look, decide, press, look again" loop |
+| `work/step1.py` | one key per screenshot, printing changed pixels and colour count per step, so "did the screen advance?" is a number |
+| `work/titlecap.py` | runs to `Layout/Title.arc` and captures it |
+| `work/tobattle2.py` | the full run with `DM_KBD` set, to a battle |
+| `work/fps_ab.py`, `work/gputs_ab.py`, `work/audio_probe.py`, `work/mem_soak.py` | the A/B and soak measurements behind §14e, §14f, §14j |
+
+The reusable lesson, in the spirit of `docs/PORTING-WORKFLOW.md`: **when a screen will not advance,
+suspect a host-side answer to a system dialog before suspecting the game.** The `swkbd` line had been
+in the log for hours, saying "treated as cancel", and the whole five-minute drive was being wasted on a
+name field that could never be filled.
+
+### 14m. What upstream and the sibling forks already know (surveyed 2026-11-04)
 
 The `nxnative` ecosystem turned out to hold the answers to three of the open items. Read before
 re-deriving anything here.
