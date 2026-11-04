@@ -103,6 +103,12 @@ def main():
         check("flow", "Battle" in lay, f"layouts {lay}")
         if "Battle" not in lay:
             check("flow detail", False, "never reached Battle.arc")
+        # A battle that never draws its combat effects is a different, quieter failure:
+        # the map renders but the exchange does not. Assert the effects actually loaded.
+        fx = [e for e in set(re.findall(r"Contents:/Effect/Particle/(Combat[A-Za-z]*|Field[A-Za-z]*)\.ptcl", t))]
+        combat = [e for e in fx if e.startswith("Combat")]
+        check("combat effects", len(combat) > 0,
+              f"{len(fx)} effect archives, combat set: {sorted(combat) or 'none'}")
         if "Battle" in lay:
             ft = re.findall(r"timing up to frame \d+: frame time p50 ([\d.]+) / p95 ([\d.]+)", t)
             if ft:

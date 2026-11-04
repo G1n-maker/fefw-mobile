@@ -767,10 +767,9 @@ timing up to frame 50100: frame time p50 16.66 / p95 16.89 / max 17.36 ms
 1,024 draws a frame while cursor moves redraw the grid overlays, that is about as flat as a 60 Hz frame
 gets.
 
-**What remains for a full turn**: committing the move (the cursor is placed, the path shown, but the
-move has not been confirmed and no attack has been resolved), and watching a combat exchange draw — which
-is where the particle effects and the `cb4`-bearing shader from §14g would finally be exercised. Recorded
-as [PLAN](PLAN.md) step 1e.
+**What was still open at that point** — committing the move and resolving an attack, which is where the
+particle effects and the `cb4`-bearing shader would finally be exercised — **is settled in §14k2**: a full
+training battle was played through to a level-up.
 
 **The layout order is not fixed**, which matters for any automated check. Two runs on the same plan:
 
@@ -784,6 +783,73 @@ different branch through the dialogue and the game skipped those screens. So "do
 asserted as **"reaches `Battle`"**, not as a fixed sequence; `work/smoke.py` was written the strict way
 first and failed on a perfectly good run, which is how this was noticed. `Gmap` and `UnitMake` are on
 *one* path, not *the* path.
+
+### 14k2. A whole battle was played, and the combat effects ran
+
+The blind plan that reached the map did not stop there: it **fought the training battle through to a
+level-up**. `A` on a unit, `A` to pick the move, `A` to commit, `A` through the exchange — the loop the
+tutorial teaches — and the result was
+
+```
+LEVEL UP 2
+Zephyr  卫士
+HP 30   力量 14 (+1)   魔力 8   速度 11 (+1)   技巧 10 (+1)
+防守 9  魔防 11 (+1)   幸运 9 (+1)   魅力 9 (+1)
+```
+
+with the gold stars marking each gain. That is the game's own progression maths running on the host.
+[`docs/images/battle-levelup.png`](../images/battle-levelup.png) is that screen: the `LEVEL UP 2` plate,
+the hooded 卫士 with the wooden spear, and every stat with its increment starred.
+
+**The combat particle effects loaded and drew.** 45 `/Effect/` archives in that session, the combat set
+among them:
+
+```
+Contents:/Effect/Particle/Combat.ptcl
+Contents:/Effect/Particle/CombatCMN.ptcl
+Contents:/Effect/Particle/CombatHitDamageCMN.ptcl     ← the hit-damage effect
+Contents:/Effect/Particle/CombatDeathVision.ptcl      ← the death effect
+```
+
+So the `Effect/Particle` subsystem that §14g flagged as untested is now exercised end to end, and no
+visual defect was reported alongside it.
+
+**The `cb4` line appears on more than one particle shader**, which is the useful new fact:
+
+| run | shader named | asset |
+|---|---|---|
+| earlier | `300c5dd0fd84cf79_b` | `/Effect/Particle/FieldBtl200.ptcl` var2 |
+| this battle | `d3e4e8759508cdf9_b` | `/Effect/Particle/FieldHub100A1.ptcl` var20 |
+
+Both are particle effects of different families and different variants. That settles what kind of thing
+this is: **it is a property of the particle shader family**, not of one effect — which is exactly
+consistent with upstream's reading that the game simply draws with that slot unbound (§14m). No action.
+
+**Frame time held through the fight.** The battle's draws ranged 161 → **975 a frame** as combat effects
+came and went, and over 300-frame windows:
+
+```
+timing up to frame 24300: p50 16.66 / p95 16.99 / max 17.87 ms
+timing up to frame 25200: p50 16.67 / p95 16.99 / max 17.49 ms
+```
+
+The main thread's real-time budget roughly doubled from the menu's 3.07 ms to **7.84 ms of 16.67**, which
+is the headroom that combat effects and the extra draws spend — and it still fits.
+
+**A measuring trap worth recording.** The one `max 182.26 ms` in that window is **the screenshot itself**:
+
+```
+[dm] DM_CTL: screenshot of the next frame → …/r0.png
+[dm] [nvn-mtl] screenshot 3840x2160 format 71 → …/r0.png ok
+[dm] [longframe] frame 23473 (391.89 s) whole frame 182.3 ms … GPU 13.2 ms
+```
+
+`shot` calls `mtl_finish_gpu()` to read the texture back, which stalls the frame it lands on. So **a
+screenshot perturbs the frame it captures** — never quote a `max` from a window that contains one. Every
+`p50`/`p95` figure here comes from windows without a screenshot in them.
+
+With this, [PLAN](PLAN.md) step 1e is **done**: a unit was selected, moved, an exchange resolved, the
+combat effects drew, and a level-up confirmed the result.
 
 ### 14l. The driving tools that made this reachable, kept in `work/`
 
