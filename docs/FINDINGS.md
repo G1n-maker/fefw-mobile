@@ -1093,3 +1093,49 @@ the next step, not the implementation.
 `DM_NVN_TEXINFO` can enumerate textures by size and pool, and the memory line already reports
 `shared textures 232 (15 unreferenced; evicted on storage takeover 304 in total)` — so an eviction path
 exists and simply is not driven by scene changes. Quantifying that gap is the first iOS task.
+
+### 14o. The save file's container — measured, so a save editor is a known amount of work
+
+The save this game writes (`run/save/000/Auto`, 198,678 bytes after one battle) is a **zstd stream in a
+224-byte header**, not an obfuscated format:
+
+| offset | what |
+|---|---|
+| `0x000` | header, magic `0xCDEFBCDD`, a 32-bit value at `+0x08` (`0x97CBBF83`) that is probably a checksum, and `+0x0C = 1` (a version) |
+| `0x0E0` | 32 more header bytes |
+| `0x124` | **zstd frame** (`28 b5 2f fd`) |
+| — | decompresses to **463,272 bytes** |
+
+The decompressed payload is **not encrypted**: entropy 5.4 bits/byte with 45% zero bytes. Structure is
+visible but not plain structs —
+
+- the character name appears as plaintext UTF-8, NUL-terminated (`Zephyr` at `0x8f61` in this save);
+- the last battle's scene id is plaintext (`Btl_004_SC00_00`), as is a music id (`BGM_B_MAP16`);
+- **numeric fields are not aligned `u32`s** — the bytes around a record are high-entropy or bit-packed, so
+  "search for the gold value" does not work directly. This is serialised/compressed-per-record data, the
+  usual shape for this publisher's saves.
+
+**What that means for a save editor**, in the order the work actually goes:
+
+1. **decompress / recompress** — trivial, `zstd` does both. Unknown: whether the header's `+0x08` value
+   must be recomputed after a change.
+2. **locate a numeric field** — needs **two saves that differ in one known value** (spend gold, gain a
+   level), then a diff of the decompressed payloads. This needs no understanding of the format, which is
+   why it is the right first move.
+3. **edit and reload** — write the byte, recompress, drop the header back on, and see whether the game
+   accepts it.
+4. **checksum** — only if step 3 is refused. That is a reverse-engineering job of its own.
+
+So a numeric editor (gold, experience, item counts) is **a few hours of diffing, not a reverse-engineering
+project**, provided the header checksum can be left alone. Unlock flags and chapter skips are a different
+class of problem: those are bits with no observable value to diff against, and would need the format
+understood rather than sampled.
+
+**Method for the next session**, and it needs both sides: play, change exactly one known value, save, and
+the host-side tooling diffs the two decompressed payloads and reports the offset that moved. The backup of
+the save this analysis used is `work/save_A.bin`.
+
+**Not to be confused with cheats.** The host already runs Atmosphère cheat files
+(`DM_CHEATS=<folder>`, `<build ID>.txt`, a Cheats panel with ⌘⇧C), which change memory at run time and never
+touch the save. For "more gold, right now" a cheat is lower risk; a save editor is for things that must
+persist, and for a save that is already in a bad state.
