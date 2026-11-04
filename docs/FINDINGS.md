@@ -358,25 +358,47 @@ This is the same shape as Link's Awakening cropping its layer, and needs no fix.
 screenshot is not what the player sees**: for any comparison, crop to `0,0 2048x1152` first, or capture
 through the present pass with `DM_NVN_SHOT_OUT=2048x1152`.
 
-### 14c. The title screen was not reached, and why
+### 14c. The title screen **is** reached — it sits inside the chapter flow
 
-`Layout/Title.arc` (734 KB, a SARC holding `blyt/Title_TopMenu.bflyt`,
-`Title_ModeSelect_MenuItem.bflyt`, `Title_Out.bflan`, …) **exists in RomFS but is never opened**: zero
-`Contents:/Layout/Title.arc` in the log of any run, including one that pressed A 130 times over four
-minutes. Only `Common.arc`, `CommonMenu.arc` and `Hub.arc` load.
+Earlier sessions reported `Layout/Title.arc` as never opened. That was a limit of the driving, not of
+the game. A press plan with directions mixed in (the d-pad matters on map and menu screens; plain A
+does not move a cursor) gets there:
 
-This is not a rendering fault. The game begins with a long unskippable prologue — the date card, the
-cinematic, the first chapter's dialogue, character creation, tutorials — and reaching the title needs
-that finished, which takes far longer than mashing A at 1.5 s intervals (the dialogue needs the text
-to finish revealing, and choices need the cursor moved). **The title screen is still open work**;
-it needs either a longer scripted route or a save that starts past the prologue.
+```
+layout load order: Common -> CommonMenu -> Hub -> Gmap -> Title -> UnitMake
+```
 
-Two facts make the route checkable rather than blind:
+`Title.arc` opens at **t=256 s / press 220**, in the middle of the chapter flow — after the world map and
+before character creation. So the file is not a "boot-time title screen" that this port skips; the game
+shows it at the point in the story where it belongs. Reaching it is a solved problem, and the sequence
+above is the recipe.
 
-- the game reads `save:/000/Global` and `save:/000/Auto` at mount and, with a fresh save, does not
-  find them (`fs path not found: save:/000/Global`, `…/Auto`) — so "a save exists" is a signal the
-  prologue was passed, and it has never appeared;
-- no save file has been written in any run so far (§14d).
+What this makes checkable, and worth doing once with a real capture of the same moment: the title's own
+layout (`blyt/Title_TopMenu.bflyt`, `Title_ModeSelect_MenuItem.bflyt`, `Title_Out.bflan` per §14c's
+original note) is now on screen, so any missing layer there is observable rather than hypothetical.
+
+**Captured, and it renders cleanly.** [`docs/images/title-difficulty.png`](../images/title-difficulty.png)
+is that screen at 2048x1152 (the game's own crop, §14b): the underwater gradient behind, the
+「请选择难度」 prompt, both difficulty buttons with their woven and diamond patterns intact, the gold
+dagger cursor on 普通, and the two description lines.
+
+```
+title_0: nonzero   117821 colors      62      <- transition frame
+title_1: nonzero   904192 colors   35988
+title_2: nonzero   903531 colors   37086      <- the one kept
+title_3: nonzero   905273 colors   36768
+```
+
+~900,000 non-black pixels and 35,000–37,000 colours, stable across a second of samples: real artwork with
+gradients and textures, not a flat placeholder. No black region standing in for a panel, no magenta. So
+the "floating layer missing its background" symptom does **not** occur on the title either — the
+`COMPRESSIBLE` question is settled here too (§14a, §14h).
+
+**`Battle.arc` is still never opened**, and the reason is now specific rather than "the prologue is
+long": character creation has a final `CHECK` page that must be confirmed, and after it the game is at
+its own story pace. A blind sequence reaches `UnitMake` reliably and then loops there. Getting into a
+battle needs the naming screen completed (a name grid, not a plain-A prompt) and the `CHECK` page
+confirmed — i.e. it needs the screen read, not more presses. That is the next concrete step.
 
 ### 14d. No save has been written yet — and that is not a host bug
 
@@ -494,18 +516,38 @@ route.
 
 ### 14g. Two `[RED]` findings, with their status
 
-**Audio: `no DeviceSink` — seen once, in an early run.** One session logged
+**Audio: `no DeviceSink` — reproducible, and it is a false alarm, not lost sound.** It happens on
+roughly a third of runs (3 of 5 measured). The difference is in the *first* command list:
+
+| run | first-frame commands | DeviceSink present |
+|---|---|---|
+| `audio.log`, `advance.log`, `fps_30.log` | **9**: `7×6 15×1 20×1 25×1` | yes |
+| `finishchar.log`, and one earlier run | **8**: `7×6 15×1 25×1` | **no** |
+
+So the game sometimes generates its first list without the sink command — a race at startup, not
+anything the host does. The host scans for the sink **once** (guarded by `!hist_logged && ncmd > 4`) and
+warns at that moment:
 
 ```
 [dm] [RED] audren: no DeviceSink (ID 0x14) in the command list, 0 commands of 0x140 bytes: the game will have no sound
 ```
 
-on a first command list of **8** commands with no ID 20 in the histogram. Every later session shows
-**9** commands including `20×1`, finds the sink, and renders. The host already has a fallback for a
-sink of an unexpected size (`the only 0x148-byte command is ID %#x, taking it as DeviceSink`), and the
-first list may simply have been generated before the game's first update. **Status: open, low
-priority** — it has not reproduced in any run since, and when it did occur the audio *renderer* still
-initialised. Worth a second look only if a run goes silent.
+**But the sound works anyway**, and the log says so two lines later:
+
+```
+[dm] audren: DeviceSink inputs 6 (24 25 …) rate 48000 samples per frame 240 mix buffer 0x81…
+```
+
+The sink is matched per list by `cmd_id(c) == g_sink_id`, and `g_sink_id` stays `0x14`, so a later list
+that does carry it is handled normally. Confirmed against the audio measurement: the runs that printed
+this line still produced full PCM (§14f — 30.8 MB, −6.6 dBFS, 0 underruns).
+
+**So the `[RED]` is wrong, not the audio.** It claims a consequence the host does not actually produce:
+it fires on "the first list I happened to inspect has no sink", which is not the same as "no sound". The
+honest fix is to defer the verdict until a list *with* the sink has been seen, or to demote the line to
+`LOG`. Not done here — it is host code shared with every other title, so it belongs in a separate change
+with its own test, and this title is not broken by it. **Recorded as a known false positive** so it is not
+chased again; a run that prints it is still a run with sound.
 
 **Graphics: `stage 1 cb4 has no uniform buffer bound` — reproducible in deeper scenes, and answered by
 upstream as not a bug.** It appears in the runs that get past the opening (character creation and beyond)
