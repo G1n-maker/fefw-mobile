@@ -60,16 +60,21 @@ against the Switch 2 original is a comparison nobody has made yet.
 
 ## Running it
 
+**Double-click `Game/Fire Emblem Fortune's Weave.app`** — a macOS settings window opens (frame rate, render
+scale, upscaling, display mode, rumble, performance HUD), then the game. Audio is on by default. Its save is
+in `~/Library/Application Support/nxnative/04007EF01F8AE000/` and its log in
+`~/Library/Logs/nxnative/04007EF01F8AE000.log`. See [docs/PLAYING.md](docs/PLAYING.md).
+
 ```bash
-./run.sh Game --platform mac      # builds the host from nxnative/ and packs the game
-cd Game/04007EF01F8AE000_build/run && DM_ROOT=... dmhost patched_v0
+./run.sh Game --platform mac-app   # build it (about 4 min once shaders are cached)
+./run.sh Game --platform mac       # or: development command line, prints the exact invocation
 ```
 
-The build prints the exact command. Two switches matter for what you see:
+Two switches matter when using the command line instead of the app:
 
 | | |
 |---|---|
-| `DM_AUDIO=1` | real audio output. **The Mac defaults to the silent sink**, which mixes correctly and throws the samples away — a run without this looks mute for the wrong reason. |
+| `DM_AUDIO=1` | real audio output. **The Mac development build defaults to the silent sink**, which mixes correctly and throws the samples away — a run without this looks mute for the wrong reason. (The app turns it on for you.) |
 | `DM_KBD=<text>` | answers the system software keyboard. **Without it the character-name screen can never be completed**, because the host has no window to type into and answers *cancel*. |
 
 `docs/FINDINGS.md` §14k1 has the full route into a battle, including the two driving traps: `A` alone
