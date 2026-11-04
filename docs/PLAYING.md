@@ -28,6 +28,33 @@ open "/Users/g1n/dev/FEFW/Game/Fire Emblem Fortune's Weave.app"
 The silent-sink difference is the one that matters: a `--platform mac` run with no `DM_AUDIO` looks mute for
 a reason that has nothing to do with audio support. The app gets this right without being told.
 
+### The game language list
+
+A dump has no `control.nacp`, so the build cannot know which languages the game supports and the **Game
+language** row is hidden — its condition is `languages>1`. The list is derivable from the game's own
+resources, which is what was done here:
+
+```bash
+ls Game/base/romfs/Msg/      # CNzh EUde EUen EUes EUfr EUit JPja KRko TWzh USen USes USfr
+```
+
+Those 12 folders name 12 languages. Writing a minimal `control.nacp` into the **extraction** directory
+with the matching `SupportedLanguageFlag` makes the build report them:
+
+```
+Game/04007EF01F8AE000_build/extract/v0/control.nacp
+```
+
+```
+the game's languages: en-US en-GB ja fr de es-419 es it fr-CA ko zh-Hant zh-Hans
+```
+
+and the row appears with all twelve. This file is generated, sits with the game data, and is **not** in
+git — like `icon.jpg`, it is lost by `rm -rf Game/` and has to be recreated (see `tools/README.md`).
+
+Note that the *game's* language (this setting) and the *launcher's* language (following the system) are
+independent: you can run the launcher in Chinese and the game in English, or the reverse.
+
 ### The app icon
 
 A dump folder carries no control data, so the build has **no icon to take from the game** and says so:
@@ -69,6 +96,21 @@ purpose: official key art is game material, and `docs/` is tracked.
 Shown at launch (turn off "Show this window at launch" to skip it; then hold Option at launch to get it
 back). Written in SwiftUI and driven by the host's own `dm/games/settings.tsv`, so it only offers settings
 that apply to this game.
+
+**It follows the system language.** The window's own text — headings, buttons, notes — and the setting
+names, options and notes all go through `L("<English>")` (`dm/ios/Sources/L10n.swift`), resolved against
+the first of the user's preferred languages that has a table in `dm/l10n/<lang>.lproj/Localizable.strings`.
+Keys are the English strings themselves, so a missing translation falls back to English rather than
+showing blank, and a new table can be added without touching the code.
+
+Simplified Chinese ships today (56 entries). To check which language an app will use before launching it:
+
+```bash
+swift -e 'import Foundation; let b = Bundle(path: "/path/to/Game.app")!; print(b.localizations, Bundle.preferredLocalizations(from: Array(b.localizations)))'
+```
+
+`CFBundleLocalizations` in `Info.plist` is generated from the `.lproj` folders present at pack time, so a
+build with no translations simply has no such key and runs in English.
 
 **Basic:** Frame rate (30 / 60), Render scale, Console mode (Docked / Handheld), Game language, Display mode
 (Window / Fullscreen).
@@ -177,6 +219,15 @@ The parts a screenshot cannot judge:
   alarm — the sound works; see §14g).
 
 ## If the app will not start
+
+**Expect a "verifying" window the first time a fresh build is opened**, and after any change that re-signs
+the app. macOS hashes the bundle before running it, and this one carries 27 GB of game data, so the wait is
+proportional to that — roughly 10–30 seconds on a fast disk. It is not loading game resources: the game
+process does not exist yet, and the log has not been created. Pressing Play is the *next* step, after this.
+
+The same applies to the settings window's own `Play`: it starts the host, and from there ~20 seconds is
+the game genuinely loading (modules, shader libraries, first texture uploads). That part is real work and
+does not shorten.
 
 The log is the first thing to read: `~/Library/Logs/nxnative/04007EF01F8AE000.log`. Two states it can be in
 that look like trouble and are not:

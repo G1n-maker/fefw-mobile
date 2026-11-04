@@ -16,6 +16,33 @@ patch from the tree and keep it here.
 
 ## Needed now
 
+### 0. The launcher's own text, in Chinese — **applied**
+
+The settings window had no localisation at all: no `.lproj`, no `.strings`, no `NSLocalizedString`, and
+every label a hardcoded English literal in `dm/mac/Launcher.swift`. Setting rows were no better — their
+names came from `dm/games/settings.tsv`, hardcoded English shared with the iOS front end.
+
+Now every string goes through `L("<English>")` (`dm/ios/Sources/L10n.swift`), and
+`dm/l10n/<lang>.lproj/Localizable.strings` holds the table; the English text is the key, so a missing entry
+falls back to English and a new language needs no code change. `pack_app.py` gains a `localisations()` list,
+copies the `.lproj` folders into `Resources/`, adds them to the build fingerprint, and writes
+`CFBundleLocalizations` (the `<lang>` names, not `<lang>.lproj` — the suffixed form makes macOS fail to
+match).
+
+Simplified Chinese ships with 56 entries. Verified: with `AppleLanguages = ["zh-Hans-CN"]`,
+`Bundle.preferredLocalizations` resolves `zh-Hans`, the table loads 56 keys, and `Play → 开始游戏`,
+`Quit → 退出`, `Game language → 游戏语言`.
+
+**This is upstream's code, not this title's.** It belongs in a PR of its own; it is applied here because the
+window is the only way in.
+
+### 0b. The **Game language** row needed `control.nacp` — **worked around, no code change**
+
+The row's condition is `languages>1`, and a dump has no control data, so it never appeared. A minimal
+`control.nacp` in the extraction directory, with `SupportedLanguageFlag` derived from the game's own
+`romfs/Msg/` folders, makes the build report all twelve languages and show the row. Regeneration recipe in
+[`../tools/README.md`](../tools/README.md).
+
 ### 1. `COMPRESSIBLE` must not exclude a texture in a pool the CPU writes — **applied; measured as no-op on the screens reached**
 
 Two places, both in the host. This is
@@ -87,7 +114,7 @@ cd nxnative && git diff > ../patches/fefw-host-changes.patch
 and record in [../docs/FINDINGS.md](../docs/FINDINGS.md) what each change fixed here, with the log line
 that showed it.
 
-**State now:** item 1 is applied and saved as [`fefw-host-changes.patch`](fefw-host-changes.patch)
-(37 lines, `hle_nvn.c` and `nvn_mtl.m` only). Items 2 and 3 are untouched — item 2 (`present_fill`)
-only matters once the phone's aspect ratio is in play, and item 3 is an iOS-only cosmetic change. The
-list is not empty yet, so the "generate the patch and keep it here" step applies to item 1 alone.
+**State now:** items 0, 0b and 1 are applied and saved as [`fefw-host-changes.patch`](fefw-host-changes.patch)
+(7 files, 160 insertions). Items 2 and 3 are untouched — item 2 (`present_fill`) only matters once the
+phone's aspect ratio is in play, and item 3 is an iOS-only cosmetic change. Item 0b needed no code at all:
+it is a generated `control.nacp` beside the game data.

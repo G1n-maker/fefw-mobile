@@ -6,6 +6,36 @@ control files into `work/`, which is git-ignored.
 
 Everything assumes a build exists at `Game/04007EF01F8AE000_build/` (`./run.sh Game --platform mac`).
 
+## Regenerating the app's two hand-supplied files
+
+A dump folder carries neither of these, so they live in the **extraction** directory and are lost if
+`Game/` is removed:
+
+| file | what it is |
+|---|---|
+| `extract/v0/icon.jpg` | the app icon (any square image; `pack_app.py` makes the `.icns`) |
+| `extract/v0/control.nacp` | a minimal control-data file, so the build knows the game's name, version and languages |
+
+`control.nacp` needs only a title, a version and the language flag at `0x302C`. The flag is one bit per
+language in `dm/tools/nacp.py`'s `LANGUAGES` order, and the languages are readable from the game itself —
+`romfs/Msg/` holds one folder per language (`USen`, `EUen`, `JPja`, `EUfr`, `USfr`, `EUde`, `EUes`, `USes`,
+`EUit`, `CNzh`, `TWzh`, `KRko`). Regenerate it with:
+
+```python
+import struct, pathlib, sys
+sys.path.insert(0, 'nxnative/dm/tools'); import nacp
+MAP = {'USen':'en-US','EUen':'en-GB','JPja':'ja','EUfr':'fr','EUde':'de','USes':'es-419',
+       'EUes':'es','EUit':'it','CNzh':'zh-Hans','TWzh':'zh-Hant','KRko':'ko','USfr':'fr-CA'}
+dirs = sorted(p.name for p in pathlib.Path('Game/base/romfs/Msg').iterdir() if p.is_dir())
+flags = sum(1 << [c for c, _ in nacp.LANGUAGES].index(MAP[d]) for d in dirs)
+b = bytearray(0x4000); n = b"Fire Emblem Fortune's Weave"; b[:len(n)] = n
+struct.pack_into('<I', b, 0x302C, flags); b[0x3060:0x3065] = b"1.0.0"
+pathlib.Path('Game/04007EF01F8AE000_build/extract/v0/control.nacp').write_bytes(bytes(b))
+```
+
+Without `control.nacp` the build still works; it just hides the **Game language** row and names the app
+from the profile. Without `icon.jpg` the app icon is blank.
+
 ## The one thing to know first
 
 **A screen that will not advance is usually a host answer to a system dialog, not the game.** The
