@@ -400,39 +400,39 @@ its own story pace. A blind sequence reaches `UnitMake` reliably and then loops 
 battle needs the naming screen completed (a name grid, not a plain-A prompt) and the `CHECK` page
 confirmed — i.e. it needs the screen read, not more presses. That is the next concrete step.
 
-### 14d. No save has been written yet — and that is not a host bug
+### 14d. Saving works — measured, after an earlier note said it had not happened
 
-Every run so far, including one with `DM_FS=1` (`fs` logs opens, misses and read totals) and one with a
-scratch `DM_SAVE`:
+An earlier version of this section reported that no save had ever been written. That was true of the
+sessions up to that point, and it is **no longer** true: once the flow got past the prologue, the game
+saved, committed, and read its save back.
 
 ```
-commit/ : (empty)
-commit.work/ : (empty)
+$ find run/save -type f
+run/save/000/Auto     198,676 bytes
+run/save/000/Global        64 bytes
 ```
 
-The save mount is in place — `fs mount save: → …/save.work (transactional save: work directory, swapped
-in atomically on Commit)` — and the game *reads* it, but no `CreateFile`, `WriteFile` or `Commit`
-happens. The host side was checked rather than assumed:
+Both the committed tree and the transaction work directory hold them, i.e. a `Commit` completed. The next
+session then behaves like a returning player:
 
-- `main` imports the whole write path: `_ZN2nn2fs10CreateFileEPKcl`, `…9WriteFile…WriteOptionE`,
-  `…6CommitEPKc`, `…9FlushFile`, `…11SetFileSize`, `…15CreateDirectory`. (Read from main's dynamic
-  symbol table: 931 symbols, 27 of them `nn::fs`. `sdk` imports no `nn::fs` at all — its 1,478 are
-  definitions.)
-- each of those has a hook, including `Commit(PKc)`, `Commit(PKc, CommitOption)`, `Commit(PKPKci)` and
-  the SDK 11 `CommitSaveData(PKc)`.
+| open mode | count | meaning |
+|---|---|---|
+| `mode=1` | 13 | read |
+| `mode=6` | **6** | read + write — the game writing its progress |
 
-**The "Saving..." on the auto-save panel is part of the artwork.** Two things say so, and both are
-observable rather than inferred:
+and, decisively, that session **never invoked the software keyboard and never loaded `UnitMake`** — it read
+the existing save and skipped character creation entirely. `Global` is 64 bytes of metadata (version,
+commit stamp, size) and `Auto` is the real save; both were rewritten in place at the end of the run.
 
-- it is the only English text on a screen that is otherwise entirely Chinese — the game is running
-  `DM_LANG=zh-Hans`, and a live status string would have been localised like everything around it;
-- nothing was written while it span: no file in `commit/` or `commit.work/`, no `save:` open with a
-  write mode, and the panel sits still for as long as you leave it (45,300 frames in §14e).
+So the whole save path — `nn::fs` write hooks, the transactional clone-and-swap, and the game's own
+load-on-boot — is exercised and correct on this title. The host's `Commit(PKc)` and every `WriteFile` /
+`CreateFile` / `SetFileSize` hook are doing what they should.
 
-So the screen is a tutorial *explaining* auto-save, and the first real save comes later. Consistent
-with §14c: `save:/000/Global` and `save:/000/Auto` are still missing, so the prologue has not been
-passed. What to watch for, when a run does save: a non-empty `commit/`, and
-`[dm] fs open … save:/…` with the mode's write bit set.
+Earlier measurement that this replaces: before the flow was passed, sessions read `save:/000/Global` and
+`save:/000/Auto` and got `fs path not found`, because nothing had ever written them. That was the game not
+having saved yet, not the host losing a write — the host's write path was verified complete by reading
+`main`'s dynamic symbol table (`CreateFile`, `WriteFile`, `Commit`, `FlushFile`, `SetFileSize`,
+`CreateDirectory`, each with a hook including every `Commit` overload).
 
 ### 14e. Memory: flat once a scene settles, and flat through 20 minutes of gameplay
 

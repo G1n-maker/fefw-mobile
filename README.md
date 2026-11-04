@@ -29,6 +29,7 @@ a host written for Apple platforms, and the NVN graphics API is rebuilt on Metal
 | Audio | real 48 kHz stereo mix: −6.6 dBFS peak, 0 underruns, verified as music by spectrum |
 | Memory | no leak — **20 minutes inside a battle, playing, and resident stayed at 4,641 MB** with residency set, serial objects and pool count all unchanged (29 samples, 48,000 frames, slope +0.00) |
 | Picture | no missing texture anywhere in that path: 0 magenta pixels, no black region standing in for a panel |
+| Saves | **work and load**: `run/save/000/Auto` (198 KB) + `Global`, committed; the next session reads them and skips character creation |
 | `[RED]` lines | **0** on the graphics path; two known and explained, see below |
 
 The one exception to the frame rate is the **prologue's cutscenes**, where a frame takes 21 ms instead of
