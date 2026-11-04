@@ -57,10 +57,12 @@ separate pull requests if they go upstream.
 
 ## Read this before writing code
 
-1. [`docs/FINDINGS.md`](docs/FINDINGS.md) — what has been measured so far, and what is still unknown.
-2. [`docs/PLAN.md`](docs/PLAN.md) — the order of work, and what would make this title a dead end.
-3. [`docs/CHEATS.md`](docs/CHEATS.md) — the cheat design (menu/panel, three kinds, the address still missing).
-4. [`docs/PORTING-WORKFLOW.md`](docs/PORTING-WORKFLOW.md) — the procedure, with the traps that cost
+1. [`nxnative/dm/games/04007EF01F8AE000/README.md`](nxnative/dm/games/04007EF01F8AE000/README.md) — **the host's own notes for this title.** Read this before measuring anything: it has the frame-rate field layout, the instruction that sets the target to 30, the keyboard map, and open questions that are still open.
+2. [`docs/FINDINGS.md`](docs/FINDINGS.md) — what has been measured so far, and what is still unknown.
+3. [`docs/PLAN.md`](docs/PLAN.md) — the order of work, and what would make this title a dead end.
+4. [`docs/CHEATS.md`](docs/CHEATS.md) — the cheat design (menu/panel, three kinds, the address still missing).
+5. [`docs/PLAYING.md`](docs/PLAYING.md) — how to run it, what the settings do, what to look at.
+6. [`docs/PORTING-WORKFLOW.md`](docs/PORTING-WORKFLOW.md) — the procedure, with the traps that cost
    hours in the previous project.
 
 **Before re-deriving a graphics or boot behaviour, check upstream's notes.** `nxnative/docs/reference/`

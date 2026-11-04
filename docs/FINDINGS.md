@@ -1139,3 +1139,56 @@ the save this analysis used is `work/save_A.bin`.
 (`DM_CHEATS=<folder>`, `<build ID>.txt`, a Cheats panel with ⌘⇧C), which change memory at run time and never
 touch the save. For "more gold, right now" a cheat is lower risk; a save editor is for things that must
 persist, and for a save that is already in a bad state.
+
+### 14p. Two things a search of GitHub turned up — one of them correcting this file
+
+Looking for existing cheat codes found two sources, and both change how the work above should be read.
+
+**1. `weile10000/FEFW-60fps`** — same title ID (`04007EF01F8AE000`), and its entire purpose is the problem
+§14j1 found by playing: *"60 fps without speedup / 60fps 且不加速"*. It documents the same field layout the
+host already knows, adds nothing we did not measure, **and independently confirms the 2× result**:
+
+> This is **not** Ctrl+U / `EDEN_NX2_SWAP_INTERVAL=1`. Those unlock the frame limiter and make the game run
+> 2–3x too fast, because logic advances per presented frame.
+
+It also gives a worked pointer-chain cheat, which is the most useful thing in it for this project:
+
+```
+[60fps]
+40010000 00000000 0000003C    R1 = 60
+58000000 021E60D8             R0 = *(u64*)(main + 0x21e60d8)
+98000100 00000000 000001DC    R0 += 0x1dc
+A4100200 00000000             *(u32*)R0 = R1
+```
+
+That is exactly the shape a "write gold" cheat takes — dereference a global, add a field offset, store — so
+the mechanics of a future cheat are now demonstrated rather than assumed.
+
+**2. Upstream already had a README for this title, and this file did not account for it.**
+`nxnative/dm/games/04007EF01F8AE000/README.md` — 69 lines, present in the local clone the whole time, never
+read. It contains, among other things, what §14j1 spent an evening deriving:
+
+- the graphics object's field layout and **which instructions set the target**: 60 at `main+0x652960` and
+  `main+0x66af3c` (title and menus), **30 at `main+0x7bf1c0` where gameplay starts**;
+- that **59 readers** step the game by `60.0 / target`, and that 55 of them match the rewriter's pattern;
+- the keyboard map (J K U I = A B X Y, WASD the stick, Z/C = ZL/ZR);
+- `stage 1 cb4 has no uniform buffer bound`, "once a run, with no effect seen" — the same conclusion §14g
+  reached independently;
+- an **iOS limitation this project had not hit yet**: "the 16 GB alias region is over iOS's limit".
+
+**The correction that matters.** Upstream wrote:
+
+> **Not measured:** game speed at 60 against 30 over the same route (the player saw battles at 60 with
+> nothing reported fast).
+
+So the 2× speed was an **open question upstream, answered here by playing.** That is worth stating plainly:
+the measurement in §14j1 is new information, not a rediscovery — and it arrived only because the player
+noticed something no log reports. A frame-rate graph cannot show that a game is running twice as fast.
+
+**What this says about method.** Two lessons, both cheap to follow and both missed here: **read the game's
+own README in the host tree before measuring anything** (`dm/games/<id>/README.md` exists for every
+supported title), and **search for the title ID** — a fork working on the same title surfaces the problems
+the upstream notes leave open.
+
+**Not found:** any cheat for gold, materials or experience. The 60 fps repack is the only public one, so
+`docs/CHEATS.md` still needs an address found by measurement.
