@@ -28,6 +28,42 @@ open "/Users/g1n/dev/FEFW/Game/Fire Emblem Fortune's Weave.app"
 The silent-sink difference is the one that matters: a `--platform mac` run with no `DM_AUDIO` looks mute for
 a reason that has nothing to do with audio support. The app gets this right without being told.
 
+### The app icon
+
+A dump folder carries no control data, so the build has **no icon to take from the game** and says so:
+
+```
+no game icon: a dump folder has no control data; the app's icon will be blank
+```
+
+The icon is therefore supplied by hand, as `icon.jpg` in the **extraction** directory — not in `Game/base/`,
+which is what the message's wording invites you to try:
+
+```
+Game/04007EF01F8AE000_build/extract/v0/icon.jpg
+```
+
+The build finds it there (the same place `nx_extract` puts the control data's `icon.jpg` for a game that
+has it), converts it to `AppIcon.icns` at every size macOS asks for, and sets `CFBundleIconFile`. The step
+appears as `[7/7] Mac app · icon`.
+
+After replacing an icon, macOS may keep showing the old one. Nudge LaunchServices:
+
+```bash
+touch "Game/Fire Emblem Fortune's Weave.app"
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
+  -f "Game/Fire Emblem Fortune's Weave.app"
+```
+
+**The art is the player's own.** This repository ships no game assets, and the icon is no exception: the
+key art used here is a file the owner supplied, kept out of git with the rest of the game's material. A
+build without it simply has a blank icon.
+
+The source art and the prepared square are kept in `work/icon/` (`source-keyart.png`, `icon.png`,
+`icon.jpg`), which is git-ignored — so `rm -rf work/` loses the icon along with the builds. To restore it,
+drop the art back in as `icon.jpg` in the extraction directory. Note that it was **not** left in `docs/` on
+purpose: official key art is game material, and `docs/` is tracked.
+
 ### The settings window
 
 Shown at launch (turn off "Show this window at launch" to skip it; then hold Option at launch to get it
