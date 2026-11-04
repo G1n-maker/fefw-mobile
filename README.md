@@ -31,8 +31,10 @@ a host written for Apple platforms, and the NVN graphics API is rebuilt on Metal
 | Picture | no missing texture anywhere in that path: 0 magenta pixels, no black region standing in for a panel |
 | `[RED]` lines | **0** on the graphics path; two known and explained, see below |
 
-The one exception to the frame rate is the **prologue's cutscene decode**, where the main thread plus
-`MovieVideoHandler` need 21 ms a frame. Menus, dialogue and battle are all flat at 60.
+The one exception to the frame rate is the **prologue's cutscenes**, where a frame takes 21 ms instead of
+16.67. The GPU is 0.57 ms of that and the host's translation 0.305 ms — **about 20 ms is the game's own
+per-frame code**, which at 30 fps (the rate the game itself asks for) fits comfortably in 33.3 ms. It is
+not a defect and no host setting fixes it; menus, dialogue and combat are all flat at 60.
 
 Two `[RED]` lines are recorded rather than chased, because both are upstream behaviour and neither
 breaks this title:

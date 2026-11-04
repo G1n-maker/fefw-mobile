@@ -660,21 +660,40 @@ The breakdown says it is not the renderer:
 threads up to frame 6900: top: 'main thread' 218 ms/s, 'MovieVideoHandler' 16 ms/s
 ```
 
-GPU 0.8 ms and submit+present 0.3 ms out of a 23.2 ms frame: the time is the **main thread and the movie
-decoder**, not Metal. `MovieVideoHandler` is active, so frame 3300 is where the opening's movies start —
-at 60 fps the main thread needs 21.8% of every 16.67 ms budget for work that fit in 32% of a 33.33 ms
-budget at 30 fps, and it misses.
+GPU 0.8 ms and submit+present 0.3 ms out of a 23.2 ms frame. The full picture in the slow window is
+`frame time 21.05 / GPU 0.57 / submit+present 0.31`, so **about 20 of the 21 ms is guest code executing**.
+
+**It is the game's own per-frame work, not the host and not the decoder**, which the 30 fps run proves:
+
+| | `fps_target 30` | `fps_target 60` |
+|---|---|---|
+| main thread | **213 ms/s** | **229 ms/s** |
+| `MovieVideoHandler` | — | **16 ms/s** |
+| translation | — | **0.305 ms/frame** |
+| GPU | 0.59 ms | 0.57 ms |
+| frame time | 33.34 ms, flat | 21.05 ms, over budget |
+
+The main thread does **essentially the same work either way** (213 vs 229 ms/s) — it is not being made to
+work harder at 60, it is being given half the time to do it in. At 30 fps that work fits in 33.3 ms with
+room to spare; at 60 fps it must fit in 16.67 ms and needs about 20. `MovieVideoHandler` is only 16 ms/s
+and the host's translation only 0.305 ms a frame, so **neither the video decode nor the NVN→Metal
+translation is the constraint** — an earlier draft of this section blamed the decoder and was wrong.
+
+**So this is not a defect to fix.** The prologue's cutscene frames carry a fixed amount of guest work that
+does not fit a 60 Hz budget on this host's execution speed, and no host-side setting changes that: giving
+the decode thread less, or the translation less, saves 0.3 ms of 20. The honest options are to accept
+21 ms during cutscenes, or to drop to 30 for them — and 30 is what the game itself asks for.
 
 **What this does and does not mean.** It does not say 60 fps is wrong for this game: 60 held perfectly on
-every menu and dialogue screen measured (§14a), and 30 does not exercise the extra headroom at all. It
-says **the prologue's video playback is not a 60 fps workload on this host**, and that a claim of "60 fps"
-needs to be qualified by scene. The measured answer for gameplay — the 30 fps the game itself picks for
-battles — is not in yet, because battles are not reachable (§14i).
+every menu and dialogue screen measured (§14a) **and through a whole battle** (§14k2 — `p50 16.66 / p95
+16.99` at up to 975 draws a frame). It says **the prologue's cutscene frames are not a 60 fps workload on
+this host**, and that a claim of "60 fps" needs to be qualified by scene.
 
-Practical consequence for the Mac target: leave `fps_target 60` (menus and dialogue genuinely benefit,
-and it is what the earlier 60 fps verification measured), and do not treat a 21 ms frame during a
-cutscene as a regression. If battles turn out to be the game's own 30, the honest setting there is the
-game's choice, not a forced 60.
+Practical consequence for the Mac target: **keep `fps_target 60`** — menus, dialogue and combat are all
+flat, and together they are the vast majority of play time. Do not treat a 21 ms frame during a cutscene
+as a regression. If the cutscene pacing is ever judged worth fixing, the lever is not a host setting
+(there is only 0.3 ms of host overhead in a 20 ms overrun) but running those scenes at the game's own 30,
+which is a front-end feature, not a bring-up fix.
 
 **A correction to §14m.** The paragraph there named `nxnative-fc26-120fps` as "another SDK 22.2.0 title".
 It is not: that patch builds on **EA SPORTS FC 26, SDK 19.3.3** (title `01004FF021942000`, engine
