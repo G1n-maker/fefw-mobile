@@ -66,6 +66,59 @@ cd Game/04007EF01F8AE000_build/run && DM_ROOT=... DM_AUDIO=1 dmhost patched_v0
 Add `DM_AUDIO=1` unless you want silence, and `DM_KBD=<name>` if you will start a new game (without it the
 character-name screen can never be completed — see `docs/FINDINGS.md` §14k).
 
+## Controllers
+
+**A Bluetooth controller needs no setup.** Pair it with macOS, launch the app, and it takes a player slot.
+Xbox, PlayStation, Switch Pro and MFi pads go through Apple's `GameController` framework, which the host
+reads for buttons, sticks, motion and rumble; pads that macOS does not list there — an 8BitDo in its own
+mode, some third-party Bluetooth pads — are read as raw HID alongside.
+
+Buttons are mapped **by position**: the pad's right face button is the game's A, bottom is B, top is X,
+left is Y. So Xbox's A behaves as the game's A, not as its B. The host also disables the system gesture on
+Home and Share so the game receives them.
+
+Rumble is on by default; **Controls** in the settings window has Game rumble, Rumble strength, and a
+**Rumble cutoff** for games whose quiet HD-rumble texture keeps the motors spinning.
+
+Each controller becomes its own player. To make them all play player 1 instead, set `DM_PAD_MERGE=1`.
+
+### If the buttons are in the wrong places
+
+Only raw-HID pads on a non-8BitDo vendor can hit this, because HID has no standard button numbering and the
+default map follows 8BitDo's. The log says so on connect:
+
+```
+controller 'XxxPad' (HID, 1234:5678): buttons use 8BitDo's numbering; if they are
+in the wrong places, DM_HID_LOG=1 logs each button's number for a DM_HID_MAP
+```
+
+Follow that: run with `DM_HID_LOG=1`, press each button, read the usage numbers off the log, then write
+`DM_HID_MAP=A=1,B=2,X=4,Y=5,…` into `~/Library/Application Support/nxnative/04007EF01F8AE000/env.txt`.
+GameController pads never need this.
+
+### Confirming a pad was seen
+
+```bash
+tail -f ~/Library/Logs/nxnative/04007EF01F8AE000.log | grep -i controller
+```
+
+A connected pad logs one line immediately:
+
+```
+controller 'Switch Pro Controller' connected: player 1 (npad 0)
+controller 'DualSense' connected: player 2 (npad 1), with motion (gyro)
+controller '8BitDo Pro 2' (HID) connected: player 1 (npad 0)
+```
+
+Nothing logged means the host never saw it, and no setting will help — check the pairing in System Settings
+first.
+
+**Not yet verified with a physical pad on this title.** The support described here is the host's, read from
+`dm/host/front_mac.m` and `dm/host/pad_hid_mac.h`, and the app sets no controller environment variables. What
+has not been done is pairing a pad and pressing its buttons in *this* game, so the button positions above are
+the host's documented mapping rather than something measured here. If a button is wrong on a GameController
+pad — not just a raw-HID one — that is a real finding worth recording.
+
 ## What to look at
 
 The parts a screenshot cannot judge:

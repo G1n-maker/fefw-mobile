@@ -62,6 +62,9 @@ Two traps that make a session look stuck when it is not:
 | `tools/mem_soak.py` | 10-minute soak through scene loads: does `footprint` / `resident` grow, and does it stop growing |
 | `tools/battle_soak.py` | 20-minute soak **inside a battle** while playing: tests the case an iPhone's ceiling cares about, and separates growth from scene loading |
 
+`tools/battle_soak.py` and `tools/mem_soak.py` take `--minutes`; both sample the host's own counters every
+time it prints them (every 300 frames), so a faster sampler sees the same line twice rather than a stall.
+
 `tools/audio_probe.py` writes `work/audio.pcm`; `work/audio_check.py` in the same folder analyses it
 (harmonics vs noise vs DC) if it is still around — the spectral-flatness figure in FINDINGS §14f came
 from there.
