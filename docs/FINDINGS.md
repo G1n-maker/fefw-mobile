@@ -1043,3 +1043,53 @@ ship (`V_JP` 3.2 GB, `V_EN` 2.8 GB) and the host does not choose: it passes `DM_
 `oe::GetDesiredLanguage` and the *game* picks the voice track. That matches the series' habit of fixed
 Japanese voice with localised text, and it means a voice check must compare against the Japanese
 original, not the English one.
+
+### 14n. Where the memory actually goes — and why the iPhone is the open problem
+
+Measured with `DM_MEMSTAT` (`tools/memstat_run.py`), read-only, over 289 s of the opening. Peak sample
+at t=170 s:
+
+```
+phys_footprint   4,881 MiB      <- the figure an iOS memory limit is judged on
+GPU allocated    4,563 MiB      <- Metal's own count: textures and render targets
+```
+
+| class | resident | charged | what it is |
+|---|---|---|---|
+| **guest** | 3,190 | **3,389** | the game's own heap: textures, models, engine data, RomFS reads |
+| file | 2,666 | **0** | clean file-backed mappings — **the kernel can drop these under pressure** |
+| gpu | 202 | 310 | IOAccelerator / IOSurface tagged |
+| malloc | 177 | 203 | the host's own heap |
+| code | 50 | 54 | module images |
+| unattributed | — | 917 | GPU-private memory that sits in no VM region |
+
+**Two facts decide the iPhone question.**
+
+1. **The file-backed 2,666 MiB is all clean** — every one of the 70 regions has `dirty = 0`, and the
+   class's charged total is 0. So it is pageable and does not count against the limit the way guest
+   memory does. It is not the problem.
+2. **The guest 3,389 MiB is.** That is what competes with the ~3.4 GB an 8 GB iPhone gives this kind of
+   app (upstream measured 3,375 MB on an **iPhone 16 Pro Max**, `memory.md`).
+
+So at this shallow point the numbers **just about fit**, and that is the whole margin. Deeper scenes do
+not: the earlier soak that kept loading scenes reached **6,059 MB resident** (§14e), which is far past it.
+The peak is not a constant — it is set by the worst scene a session visits, and **it does not come back
+down**, which §14e already established.
+
+**What this means for the plan.** The 4.5 GB of GPU allocation is the bulk of what could be reclaimed, and
+almost all of it is textures. But it has not been separated into "needed by this scene" and "kept from
+earlier ones", and until it is, nobody can say how much eviction would actually return. That measurement is
+the next step, not the implementation.
+
+**Options, cheapest first** (none applied; the Mac build is untouched and plays as it does):
+
+| option | cost | what it buys |
+|---|---|---|
+| `Render scale` 0.75 | a settings change; visibly softer, and the game already reconstructs 2× through MetalFX | smaller render targets — memory and GPU time, **but not the loaded textures** |
+| `present_snap` / `Metal 4 pipelines` off | a settings change | a little memory, at the cost of rebuild time |
+| texture eviction on scene change | **host code** | the only thing that can move the 4.5 GB figure |
+
+**Not measured, and needed before choosing:** how much of `GPU allocated` belongs to the current scene.
+`DM_NVN_TEXINFO` can enumerate textures by size and pool, and the memory line already reports
+`shared textures 232 (15 unreferenced; evicted on storage takeover 304 in total)` — so an eviction path
+exists and simply is not driven by scene changes. Quantifying that gap is the first iOS task.
