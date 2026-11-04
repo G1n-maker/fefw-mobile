@@ -112,8 +112,22 @@ swift -e 'import Foundation; let b = Bundle(path: "/path/to/Game.app")!; print(b
 `CFBundleLocalizations` in `Info.plist` is generated from the `.lproj` folders present at pack time, so a
 build with no translations simply has no such key and runs in English.
 
-**Basic:** Frame rate (30 / 60), Render scale, Console mode (Docked / Handheld), Game language, Display mode
-(Window / Fullscreen).
+**Basic:** Frame rate (Game default / 30 / 60), Render scale, Console mode (Docked / Handheld), Game language,
+Display mode (Window / Fullscreen).
+
+**Frame rate deserves a note.** This game stores a target rate and steps by `60 / target` each frame. It
+ships with **60 in menus and 30 in battle**. Forcing 60 everywhere makes the game advance at **double
+speed** — upstream logs the same effect on Tears of the Kingdom ("a fixed-step game at 2x with
+DM_FPS_TARGET=60"). So:
+
+| choice | menus | battle | speed |
+|---|---|---|---|
+| **Game default** (default) | 60 | 30 | as on the console |
+| 30 fps | 30 | 30 | correct speed, menus half as smooth |
+| 60 fps | 60 | 60 | **2× fast** |
+
+Verified from the host's own log: `DM_FPS_TARGET=0` prints "target frame rate left as the game sets it",
+where the profile alone prints "target frame rate 30 → 60 fps".
 
 **Advanced:**
 - **Game** — Upscaling (Standard / MetalFX), the game's own upscaler, Dynamic resolution

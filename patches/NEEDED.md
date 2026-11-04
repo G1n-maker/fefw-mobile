@@ -16,6 +16,18 @@ patch from the tree and keep it here.
 
 ## Needed now
 
+### 0a. Frame rate: a **Game default** choice, and it is now the default — **applied**
+
+`fps_target 60` ran this game at **double speed**. The engine steps by `60 / target` each frame and ships
+with 60 in menus and 30 in battle, so overwriting its 30 with 60 presents 60 frames a second while stepping
+each as 1/60 s. A player noticed before any measurement did. Fixed by adding a `0` (leave the game's own
+rate) choice to the Frame rate row in `dm/games/settings.tsv` and making it the row's default; `0` is
+already a supported value (`hle_fpslock.c`: "0 = leave the game's own limit"), verified from the log —
+`DM_FPS_TARGET=0` prints "target frame rate left as the game sets it".
+
+**This is shared with the iOS launcher**, so it changes both front ends' drop-down. Detail and the
+before/after table in [../docs/FINDINGS.md](../docs/FINDINGS.md) §14j1.
+
 ### 0. The launcher's own text, in Chinese — **applied**
 
 The settings window had no localisation at all: no `.lproj`, no `.strings`, no `NSLocalizedString`, and

@@ -1,3 +1,16 @@
+diff --git a/dm/games/settings.tsv b/dm/games/settings.tsv
+index 0057d50..2fbd3c8 100644
+--- a/dm/games/settings.tsv
++++ b/dm/games/settings.tsv
+@@ -14,7 +14,7 @@
+ #   label, note  the setting's name and the line under it (may be empty; only for a setting with a cost: latency, memory, heat)
+ #   meta      optional, key=value pairs separated by ; (settings.py META lists the keys; docs/frontends.md, The settings list, describes them):
+ #             level=basic  a setting a front end shows first;  needs=<VAR>=<value>  a sub-setting, drawn only while the row that sets <VAR> has that value
+-DM_FPS_TARGET	choice	30=30 fps,60=60 fps	DM_GAME_FPS_TARGET	DM_GAME_FPS_TARGET!=0	Game	Frame rate		level=basic
++DM_FPS_TARGET	choice	0=Game default,30=30 fps,60=60 fps	0	DM_GAME_FPS_TARGET!=0	Game	Frame rate	The rate the game steps at. Game default keeps the game's own 60 in menus and 30 in battle; forcing 60 runs a fixed-step game at double speed.	level=basic
+ DM_DYNAMIC_RESOLUTION	toggle	-	0	fixups:DYNAMIC_RESOLUTION	Game	Dynamic resolution	Adjusts resolution between 70% and 100% under load. Turn off to keep full resolution for the selected console mode.
+ DM_RENDER_SCALE	range	0.5:1.0:0.05	1.0	fixups:RENDER_SCALE	Game	Render scale		level=basic
+ DM_OPMODE	choice	1=Docked,0=Handheld	DM_GAME_OPMODE	always	Game	Console mode		level=basic
 diff --git a/dm/gfx/nvn/hle_nvn.c b/dm/gfx/nvn/hle_nvn.c
 index a8e2102..b02669c 100644
 --- a/dm/gfx/nvn/hle_nvn.c
@@ -128,10 +141,10 @@ index 82fa3b3..a68ab4e 100644
              default:
 diff --git a/dm/l10n/zh-Hans.lproj/Localizable.strings b/dm/l10n/zh-Hans.lproj/Localizable.strings
 new file mode 100644
-index 0000000..62efcb2
+index 0000000..1dec9b5
 --- /dev/null
 +++ b/dm/l10n/zh-Hans.lproj/Localizable.strings
-@@ -0,0 +1,79 @@
+@@ -0,0 +1,81 @@
 +/*
 + Localizable.strings — Simplified Chinese
 + Keys are the English text in the source (L10n.swift: L("<English>")).
@@ -168,6 +181,8 @@ index 0000000..62efcb2
 +
 +/* Setting labels */
 +"Frame rate" = "帧率";
++"Game default" = "游戏默认";
++"The rate the game steps at. Game default keeps the game's own 60 in menus and 30 in battle; forcing 60 runs a fixed-step game at double speed." = "游戏推进的速率。选「游戏默认」时，菜单保持游戏原本的 60、战斗保持 30；强制 60 会让固定步进的游戏以双倍速度运行。";
 +"Console mode" = "主机模式";
 +"Upscaling" = "升频";
 +"Game language" = "游戏语言";

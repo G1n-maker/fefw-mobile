@@ -695,6 +695,52 @@ as a regression. If the cutscene pacing is ever judged worth fixing, the lever i
 (there is only 0.3 ms of host overhead in a 20 ms overrun) but running those scenes at the game's own 30,
 which is a front-end feature, not a bring-up fix.
 
+### 14j1. Correction: `fps_target 60` runs the game at **double speed**
+
+The advice above — "keep `fps_target 60`" — was wrong on a point that only showed up in play. This engine
+stores a target rate and **steps by `60 / target` every frame**:
+
+```c
+// hle_fpslock.c: gxc holds the target at +0x1dc; "at 60 the game asks for interval 1 and steps by 1.0 a frame"
+```
+
+The game ships with **60 in menus and 30 in battle**. Writing 60 over its own 30 makes it present 60 frames
+a second while stepping each of them as if a frame were 1/60 s — so **battle, and everything that runs on
+the same clock, advances at 2× the console's rate**. A player noticed it before any log did ("整体应该都快").
+Upstream documents the identical failure on another fixed-step title:
+
+> presenting at a cap the game does not step by runs a fixed-step game fast or slow
+> (Tears of the Kingdom 1.4.2 at 2x with DM_FPS_TARGET=60)
+
+So the earlier table's "60 fps, measured 60.0, no drops" was accurate as a *frame rate* and misleading as a
+*verdict*: a smooth 60 fps was being read as "better", when at this engine it means "wrong speed for
+battle".
+
+**What changed:** `dm/games/settings.tsv`'s Frame rate row gains a **Game default** choice (`0`), and it is
+now the row's default:
+
+| choice | menus | battle | speed |
+|---|---|---|---|
+| **Game default** | 60 | 30 | as on the console |
+| 30 fps | 30 | 30 | correct, menus half as smooth |
+| 60 fps | 60 | 60 | **2× fast** |
+
+Verified from the host's own log, not inferred:
+
+```
+DM_FPS_TARGET=0   →  main: target frame rate left as the game sets it (DM_FPS_TARGET)
+profile alone     →  main: target frame rate 30 → 60 fps (game profile fps_target)
+```
+
+**What did not change:** everything measured about frame *pacing* still holds — battle is flat at
+`p50 16.66 / p95 16.99` and the prologue's cutscenes still overrun at 21 ms. The correction is about the
+rate the *game logic* steps at, which is a different quantity from the rate frames are presented at, and
+that distinction is the lesson worth carrying: **a fixed-step port must report the step rate and the
+present rate separately.**
+
+The profile's `fps_target 60` stays as the build-time value (it is what a user who picks 60 gets); the
+launcher default is what changes.
+
 **A correction to §14m.** The paragraph there named `nxnative-fc26-120fps` as "another SDK 22.2.0 title".
 It is not: that patch builds on **EA SPORTS FC 26, SDK 19.3.3** (title `01004FF021942000`, engine
 `65501fbb`). The real SDK 22.2.0 neighbours are **EA SPORTS FC 27** (`0100C49025D3E000`, "SDK 22.2.0, NVN

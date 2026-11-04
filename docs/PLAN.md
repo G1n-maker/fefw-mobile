@@ -151,10 +151,10 @@ Stated plainly, so the project stops early instead of late:
 | 1f — Mac hardening | **done** — a 20-minute soak inside a battle (memory flat to the megabyte), and the cutscene frame-time question settled: the overrun is the game's own per-frame code, not the decoder or the host. See [FINDINGS §14e](FINDINGS.md) and [§14j](FINDINGS.md) |
 | 2 — audio | **works** — real BGM to 48 kHz stereo: −6.6 dBFS peak, 0 underruns, 0 `[RED]`, verified as music by spectrum. Coverage (is every sound heard?) is unmeasured. See [FINDINGS §14f](FINDINGS.md) |
 | 2b — memory stability | **no leak; flat through gameplay** — 20 minutes inside a battle, playing, held resident at 4,641 MB with every counter frozen (29 samples, 48,000 frames, slope +0.00). The high-water mark is 6.6 GB from the prologue's cinematic set and does not come back down — that policy, not a leak, is the iPhone risk. See [FINDINGS §14e](FINDINGS.md) |
-| 2c — frame rate | **60 held on menus and dialogue; not on the prologue's movies** — at frame 3300 (movies start) the main thread + `MovieVideoHandler` need 21 ms a frame, while GPU is 0.8 ms. The game's own 30 is flat all the way through. See [FINDINGS §14j](FINDINGS.md) |
-| 2c — touch | not started (Mac first; iOS front end untouched) |
-| 2d — saves | **work** — the game writes `run/save/000/Auto` (198 KB) + `Global` through the transactional save, and the next session reads them and skips character creation. See [FINDINGS §14d](FINDINGS.md) |
-| 2e — packaging | not started — 27 GB RomFS goes over separately, never in the IPA |
+| 2c — frame rate | **the game's own rate is now the default** — Game default keeps 60 in menus and 30 in battle; forcing 60 runs a fixed-step game at **2× speed**, which is what every earlier session did. Verified: `DM_FPS_TARGET=0` logs "target frame rate left as the game sets it". See [FINDINGS §14j](FINDINGS.md) |
+| 2d — touch | not started (Mac first; iOS front end untouched) |
+| 2e — saves | **work** — the game writes `run/save/000/Auto` (198 KB) + `Global` through the transactional save, and the next session reads them and skips character creation. See [FINDINGS §14d](FINDINGS.md) |
+| 2f — packaging | not started — 27 GB RomFS goes over separately, never in the IPA |
 | 3 — upstream | one change staged locally (`COMPRESSIBLE`, PR #946's shape), saved as `patches/fefw-host-changes.patch`; nothing sent yet |
 
 The facts behind every statement above are in [FINDINGS.md](FINDINGS.md), each with how it was
