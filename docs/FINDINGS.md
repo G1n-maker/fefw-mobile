@@ -741,6 +741,37 @@ a unit, moving it, confirming an attack and watching combat resolve — and the 
 that fire there, including the `cb4` one from §14g — are the next thing to exercise, and the parked
 session is the way to do it without re-running the 5-minute drive.
 
+### 14k1. Moving a unit works, and the frame time does not move with it
+
+Continuing in the same parked session, the tactical loop responds exactly as it should:
+
+1. `A` on the map enters move mode; the game shows its own tutorial — 「请将光标对准想移动的位置，然后按
+   (A)」 ("point the cursor where you want to move, then press A").
+2. `A` again hands control to the cursor, and the d-pad walks it across the board.
+3. The status panel follows whatever unit the cursor is on: it switched from `Zephyr` (衛士 Lv 1,
+   `木制枪`) to **`虚拟兵` (士兵 Lv 1, HP 22/22, 物攻 18, 命中 107, 射程 9, `木制剑`)** — a different
+   unit, different weapon, different stat block.
+4. Selecting it draws the red four-corner selection frame and the radial HP arc at its feet, and the
+   white path arrow plus the blue movement squares and red threat squares all recompute.
+
+[`docs/images/battle-move-grid.png`](../images/battle-move-grid.png) is that state.
+
+**The frame time is unmoved by any of it**, 50,100 frames into the session:
+
+```
+timing up to frame 49800: frame time p50 16.66 / p95 16.93 / max 17.55 ms
+timing up to frame 50100: frame time p50 16.66 / p95 16.89 / max 17.36 ms
+```
+
+`max 17.36 ms` — the worst single frame across 300 is 0.7 ms over the p50. For a tactical map drawing
+1,024 draws a frame while cursor moves redraw the grid overlays, that is about as flat as a 60 Hz frame
+gets.
+
+**What remains for a full turn**: committing the move (the cursor is placed, the path shown, but the
+move has not been confirmed and no attack has been resolved), and watching a combat exchange draw — which
+is where the particle effects and the `cb4`-bearing shader from §14g would finally be exercised. Recorded
+as [PLAN](PLAN.md) step 1e.
+
 ### 14l. The driving tools that made this reachable, kept in `work/`
 
 Everything under `work/` is throwaway by design, but these were the difference between "cannot reach the
