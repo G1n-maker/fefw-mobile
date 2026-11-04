@@ -59,7 +59,8 @@ separate pull requests if they go upstream.
 
 1. [`docs/FINDINGS.md`](docs/FINDINGS.md) — what has been measured so far, and what is still unknown.
 2. [`docs/PLAN.md`](docs/PLAN.md) — the order of work, and what would make this title a dead end.
-3. [`docs/PORTING-WORKFLOW.md`](docs/PORTING-WORKFLOW.md) — the procedure, with the traps that cost
+3. [`docs/CHEATS.md`](docs/CHEATS.md) — the cheat design (menu/panel, three kinds, the address still missing).
+4. [`docs/PORTING-WORKFLOW.md`](docs/PORTING-WORKFLOW.md) — the procedure, with the traps that cost
    hours in the previous project.
 
 **Before re-deriving a graphics or boot behaviour, check upstream's notes.** `nxnative/docs/reference/`
