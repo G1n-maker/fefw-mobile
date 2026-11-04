@@ -1,52 +1,77 @@
 # FEFW Mobile
 
-**Fire Emblem: Fortune's Weave** (Nintendo Switch 2) running natively on iPhone, iPad and Apple
-silicon Macs. **Not an emulator**: the game's own arm64 code executes on the Apple chip, only the
-instructions Apple's kernel cannot run are rewritten, Horizon's system services are replaced by a host
-written for Apple platforms, and the NVN graphics API is rebuilt on Metal.
+**Fire Emblem: Fortune's Weave** (Nintendo Switch 2, `04007EF01F8AE000`) running natively on iPhone,
+iPad and Apple silicon Macs. **Not an emulator**: the game's own arm64 code executes on the Apple chip,
+only the instructions Apple's kernel cannot run are rewritten, Horizon's system services are replaced by
+a host written for Apple platforms, and the NVN graphics API is rebuilt on Metal.
 
 **Bring your own game files.** Nothing from any game is in this repository.
 
-> **Status: bring-up, not a port yet.** This repository currently holds the survey, the plan, and the
-> project scaffolding. There is no working build, and one open question — whether the game can draw a
-> frame without DLSS — decides whether there will be. See [docs/PLAN.md](docs/PLAN.md) step 0 and
-> [docs/FINDINGS.md](docs/FINDINGS.md) §8.
-
----
-
-## What was measured before writing any code
-
-From the game's own modules, read without guessing:
+> **Status: playable on the Mac through the prologue into a battle's tactical map, at 60 fps.** The
+> full flow runs — opening cinematics, dialogue, the world map, the difficulty screen, character
+> creation — and reaches the battle board with units, move range and danger zones. iPhone and iPad are
+> not started. See [docs/PLAN.md](docs/PLAN.md) for what is done and what is next, and
+> [docs/FINDINGS.md](docs/FINDINGS.md) for every measurement with its evidence.
 
 | | |
 |---|---|
-| SDK | **22.2.0** — the newest the host supports, and only two games exercise it |
-| Graphics | **NVN** (no Vulkan, no EGL, no Unity) |
-| Modules | `main`, `rtld`, `sdk`, `subsdk0` (**DLSS 22.2.0**), `subsdk1`, `subsdk2` (**movie**) |
-| `main` | 26.3 MB of text, 6,886,586 instructions |
-| Rewrite sites in `main` | **0 `svc`**, 0 `tpidr`, 0 exclusives, 20,609 `x18` |
-| Host hook coverage | 835 of the host's 1,041 hooks resolve in this game's `sdk` (80%) |
-| RomFS | 28 GB, with `Shaders/` as its own 3 MB folder |
-| Links against | `dlss.nss`, `cuda.nss`, `movie.nss`, `nnSdk.nss` ← **the risk** |
-
-Full detail, with how each was measured, in [docs/FINDINGS.md](docs/FINDINGS.md).
+| ![Difficulty screen](docs/images/title-difficulty.png) | ![Battle map](docs/images/battle-training.png) |
+| The difficulty screen (`Layout/Title.arc`) | The tactical map, 1,024 draws a frame at 60 fps |
 
 ---
 
-## The one question that matters first
+## What works on the Mac, measured
 
-Apple silicon has no Tensor Core and no CUDA. `main` names `dlss.nss` and `cuda.nss`, and `subsdk0` is
-40 MB of DLSS — but `main` never references the NGX API directly, so DLSS may be an optional quality
-setting the game can skip.
+| | |
+|---|---|
+| flow | `Common → CommonMenu → Hub → Gmap → Title → UnitMake → Battle` — every layout loads. **One path of several**: another run reached `Battle` without opening `Gmap` or `UnitMake`, so "works" means *reaches Battle* |
+| Frame rate | **p50 16.66 / p95 16.89 ms** in battle at 1,024 draws a frame (GPU 7.5 of a 16.67 ms budget) |
+| Audio | real 48 kHz stereo mix: −6.6 dBFS peak, 0 underruns, verified as music by spectrum |
+| Memory | no leak — flat to the megabyte across 9,000 frames in a 10-minute soak |
+| Picture | no missing texture anywhere in that path: 0 magenta pixels, no black region standing in for a panel |
+| `[RED]` lines | **0** on the graphics path; two known and explained, see below |
 
-- **Optional** → ordinary bring-up work, and the plan continues.
-- **On every presented frame** → the project stops, honestly and early.
+The one exception to the frame rate is the **prologue's cutscene decode**, where the main thread plus
+`MovieVideoHandler` need 21 ms a frame. Menus, dialogue and battle are all flat at 60.
 
-[docs/PLAN.md](docs/PLAN.md) step 0 says how to settle it in about an hour, starting with the eden
-emulator bundle that came with the game (it runs on a PC with no Tensor Core either, so the game must
-already have a path that works without one).
+Two `[RED]` lines are recorded rather than chased, because both are upstream behaviour and neither
+breaks this title:
 
----
+- `stage 1 cb4 has no uniform buffer bound` — upstream documents this as a game that draws with nothing
+  bound; the host substitutes the zero bank by design. The shader named in our log is a particle effect
+  (`/Effect/Particle/FieldBtl200.ptcl`, variant `var2`).
+- `audren: no DeviceSink … the game will have no sound` — a **false alarm** on roughly a third of runs.
+  The game sometimes builds its first audio command list without the sink; the host scans once and warns,
+  but matches the sink per list afterwards, and the runs that print it still produce full PCM.
+
+## DLSS is not an obstacle — and it is not NGX
+
+The question that could have ended this project is answered. The game upscales **every presented frame**
+(1024x576 → 2048x1152), but through **NVN's own `nvnDlss*` API** — `main` names 58 of those entry points
+plus `nvnCommandBufferEvaluateDlss` — never through NGX. So `subsdk0` (40 MB of DLSS) and `cuda.nss` are
+never loaded, and the host replays the calls on **MetalFX's temporal scaler**, which wants the same
+inputs. Nothing NVIDIA-specific runs.
+
+The consequence for image quality: the reconstruction is MetalFX's, so a 2× upscale either way. Fidelity
+against the Switch 2 original is a comparison nobody has made yet.
+
+## Running it
+
+```bash
+./run.sh Game --platform mac      # builds the host from nxnative/ and packs the game
+cd Game/04007EF01F8AE000_build/run && DM_ROOT=... dmhost patched_v0
+```
+
+The build prints the exact command. Two switches matter for what you see:
+
+| | |
+|---|---|
+| `DM_AUDIO=1` | real audio output. **The Mac defaults to the silent sink**, which mixes correctly and throws the samples away — a run without this looks mute for the wrong reason. |
+| `DM_KBD=<text>` | answers the system software keyboard. **Without it the character-name screen can never be completed**, because the host has no window to type into and answers *cancel*. |
+
+`docs/FINDINGS.md` §14k1 has the full route into a battle, including the two driving traps: `A` alone
+does not advance the body-type page (it needs a direction first), and presses sent while dialogue is
+still playing are eaten by the dialogue.
 
 ## Layout
 
@@ -56,21 +81,25 @@ already have a path that works without one).
 ├── docs/
 │   ├── PLAN.md                  the order of work, and what would end it
 │   ├── FINDINGS.md              everything measured, with its evidence
-│   └── PORTING-WORKFLOW.md      how to port any Switch title (from the Cross Rays project)
-├── patches/                     host fixes the previous port produced
+│   ├── PORTING-WORKFLOW.md      how to port any Switch title (from the Cross Rays project)
+│   └── images/                  screenshots: allowed to commit, they are not game files
+├── patches/                     host fixes this port needed, as a patch plus a checklist
 ├── FEIYALAIDE/                  the game as it arrived (git-ignored, never committed)
 ├── Game/                        symlinks in the layout the tools read (git-ignored)
-└── work/                        extraction, builds, logs (git-ignored)
+└── work/                        builds, logs, driving scripts (git-ignored)
 ```
 
 ## The host this builds on
 
 [nxnative](https://github.com/seedds/nxnative) — the same project used for
-[Cross Rays](https://github.com/G1n-maker/crossrays-mobile), which plays on the iPhone and the Mac at
-60 fps. Two host findings from that work apply here on day one and are in `patches/`:
-`nn::fs::ReadFile`'s ReadOption overload without a byte count (already upstream), and `COMPRESSIBLE`
-excluded from the texture fill and the CPU-write tracking
-([PR #946](https://github.com/seedds/nxnative/pull/946)).
+[Cross Rays](https://github.com/G1n-maker/crossrays-mobile). Upstream already ships one Switch 2 title
+(**Donkey Kong Bananza**, `040074A01BF12000`) and its bring-up README is the closest reference this
+project has; **EA SPORTS FC 27** is the nearest SDK 22.2.0 neighbour. `docs/FINDINGS.md` §14m records
+which of their profile settings this title does and does not need, each with the measurement.
+
+`patches/` holds the one host change applied here (`COMPRESSIBLE`'s place in the texture-fill check,
+[PR #946](https://github.com/seedds/nxnative/pull/946)'s shape). It is measured as a **no-op on this
+title** — see §14a — and kept for the correctness of the check itself.
 
 ---
 

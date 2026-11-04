@@ -772,6 +772,19 @@ move has not been confirmed and no attack has been resolved), and watching a com
 is where the particle effects and the `cb4`-bearing shader from §14g would finally be exercised. Recorded
 as [PLAN](PLAN.md) step 1e.
 
+**The layout order is not fixed**, which matters for any automated check. Two runs on the same plan:
+
+| run | layout order |
+|---|---|
+| the one §14k describes | `Common → CommonMenu → Hub → Gmap → Title → UnitMake → Battle` |
+| a later one, same script | `Common → CommonMenu → Hub → Title → Battle` |
+
+The second reached the battle **without ever opening `Gmap` or `UnitMake`** — the press plan took a
+different branch through the dialogue and the game skipped those screens. So "does the flow work" must be
+asserted as **"reaches `Battle`"**, not as a fixed sequence; `work/smoke.py` was written the strict way
+first and failed on a perfectly good run, which is how this was noticed. `Gmap` and `UnitMake` are on
+*one* path, not *the* path.
+
 ### 14l. The driving tools that made this reachable, kept in `work/`
 
 Everything under `work/` is throwaway by design, but these were the difference between "cannot reach the
