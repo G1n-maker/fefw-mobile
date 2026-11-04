@@ -27,7 +27,7 @@ a host written for Apple platforms, and the NVN graphics API is rebuilt on Metal
 | flow | `Common → CommonMenu → Hub → Gmap → Title → UnitMake → Battle` — every layout loads. **One path of several**: another run reached `Battle` without opening `Gmap` or `UnitMake`, so "works" means *reaches Battle* |
 | Frame rate | **p50 16.66 / p95 16.89 ms** in battle at 1,024 draws a frame (GPU 7.5 of a 16.67 ms budget) |
 | Audio | real 48 kHz stereo mix: −6.6 dBFS peak, 0 underruns, verified as music by spectrum |
-| Memory | no leak — flat to the megabyte across 9,000 frames in a 10-minute soak |
+| Memory | no leak — **20 minutes inside a battle, playing, and resident stayed at 4,641 MB** with residency set, serial objects and pool count all unchanged (29 samples, 48,000 frames, slope +0.00) |
 | Picture | no missing texture anywhere in that path: 0 magenta pixels, no black region standing in for a panel |
 | `[RED]` lines | **0** on the graphics path; two known and explained, see below |
 

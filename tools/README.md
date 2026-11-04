@@ -59,7 +59,8 @@ Two traps that make a session look stuck when it is not:
 | `tools/fps_ab.py` | `fps_target` 30 vs 60 on the same route: frame time, drops, present-interval flips |
 | `tools/gputs_ab.py` | `gpu_timestamps` submission vs segment — for titles that read GPU time for dynamic resolution |
 | `tools/audio_probe.py` | real audio out with `DM_AUDIO_DUMP`: PCM size, peak, RMS, non-silent share, underruns |
-| `tools/mem_soak.py` | 10-minute soak: does `footprint` / `resident` grow, and does it stop growing |
+| `tools/mem_soak.py` | 10-minute soak through scene loads: does `footprint` / `resident` grow, and does it stop growing |
+| `tools/battle_soak.py` | 20-minute soak **inside a battle** while playing: tests the case an iPhone's ceiling cares about, and separates growth from scene loading |
 
 `tools/audio_probe.py` writes `work/audio.pcm`; `work/audio_check.py` in the same folder analyses it
 (harmonics vs noise vs DC) if it is still around — the spectral-flatness figure in FINDINGS §14f came

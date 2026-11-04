@@ -434,9 +434,9 @@ with §14c: `save:/000/Global` and `save:/000/Auto` are still missing, so the pr
 passed. What to watch for, when a run does save: a non-empty `commit/`, and
 `[dm] fs open … save:/…` with the mode's write bit set.
 
-### 14e. Memory: flat once a scene settles, no leak over a 10-minute soak
+### 14e. Memory: flat once a scene settles, and flat through 20 minutes of gameplay
 
-Three measurements, each doing a different job.
+Four measurements, each doing a different job.
 
 **1. Still screen, long dwell.** One run sat on the auto-save notice for **45,300 frames** (about 12
 minutes at 60 fps):
@@ -466,19 +466,34 @@ would show). Resident memory climbs while scenes load and then **stops dead**:
 
 The last four samples span **9,000 frames (2.5 minutes) with an identical resident figure to the
 megabyte**, and the counters behind it are frozen too — residency set 4,991, serial objects 4,324,
-memory pools 561, all unchanged from frame 27,300 on. **This is not a leak**: it is the loaded set, and
-it stops growing once the game stops loading new scenes.
+memory pools 561, all unchanged from frame 27,300 on.
 
-The plateau is *high* (6.6 GB of the profile's 9 GB application pool) because the port keeps every
-texture a scene touched. That is the real risk for iPhone, and it is a policy question — releasing
-textures on scene change — not a leak to fix.
+**3. Twenty minutes *inside a battle*, playing the whole time** (`tools/battle_soak.py`: park, drive to
+`Battle`, then commit moves and walk the cursor so tiles and units keep coming into view). This is the
+soak that matters before an iPhone, whose ceiling is far tighter than a Mac's — and it is stronger than "no leak": it is flat.
 
-A note on the measuring tool: a straight-line fit over the whole run reports "GROWS, +114 MiB/min",
-because it averages in the ramp while scenes load. Fit the plateau, not the ramp; the plateau is the
-question.
+```
+t=  391s frame 24600 resident 4641 MB GPU 4559 MB  res_set 4613 serial 4240 pools 557
+t=  722s frame 45600 resident 4641 MB GPU 4559 MB  res_set 4613 serial 4240 pools 557
+t= 1174s frame 72600 resident 4641 MB GPU 4559 MB  res_set 4613 serial 4240 pools 557
+```
 
-**3. Across scenes, the footprint rises with what is loaded**, which is what the table above shows:
-3,390 MiB (menus) → 4,959 MiB (after the opening cinematic) → 6,747 MiB (character creation).
+Over 29 samples and **48,000 frames**, every one of the five series fits a slope of **+0.00 per 1000
+frames** (resident −0.11, which is read-out jitter). Frame time in the same window: `p50 16.69 / p95
+17.11 ms`; draws ranged 89 → 962 a frame. The session ended on a clean `graceful exit`.
+
+**4. The inversion, explained.** The battle reading (4.6 GB) is *lower* than the prologue's (6.6 GB),
+which looked wrong until the sequence was clear: the prologue loads a cinematic's worth of textures and
+never releases them, and the battle — entered from a fresh process — never loads that set. So the figure
+tracks **what a session has loaded**, not time, and it does not come back down. That is the real risk for
+iPhone: not a leak, but a high-water mark set by the worst scene, with no eviction.
+
+**A note on the measuring tool**: a straight-line fit over a whole run reports "GROWS, +114 MiB/min" for
+measurement 2, because it averages in the ramp while scenes load. Fit the plateau, not the ramp.
+
+**And a note on sampling**: the host prints these counters every 300 frames, so a sampler that reads the
+log faster than that sees the same line twice. An unchanged `frame` number between samples is the
+sampler, not a stall — check for `DM_CTL: press` continuing and a `up to frame` that advances.
 
 ### 14f. Audio works: real BGM, no underruns
 
