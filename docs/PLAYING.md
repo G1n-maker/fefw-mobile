@@ -115,16 +115,16 @@ build with no translations simply has no such key and runs in English.
 **Basic:** Frame rate (Game default / 30 / 60), Render scale, Console mode (Docked / Handheld), Game language,
 Display mode (Window / Fullscreen).
 
-**Frame rate deserves a note.** This game stores a target rate and steps by `60 / target` each frame. It
-ships with **60 in menus and 30 in battle**. Forcing 60 everywhere makes the game advance at **double
-speed** — upstream logs the same effect on Tears of the Kingdom ("a fixed-step game at 2x with
-DM_FPS_TARGET=60"). So:
+**Frame rate deserves a note.** This game stores a target rate and steps by `60 / target` each frame, and
+it ships with **60 in menus and 30 in battle**. Writing 60 over its 30 is therefore ambiguous: the code says
+the step halves and the speed stays the same, while one play session reported the game feeling faster. That
+question is **not settled** (`docs/FINDINGS.md` §14j1); "Game default" is the choice that avoids it. So:
 
 | choice | menus | battle | speed |
 |---|---|---|---|
 | **Game default** (default) | 60 | 30 | as on the console |
 | 30 fps | 30 | 30 | correct speed, menus half as smooth |
-| 60 fps | 60 | 60 | **2× fast** |
+| 60 fps | 60 | 60 | smoother; whether it also changes speed is **unresolved** — see below |
 
 Verified from the host's own log: `DM_FPS_TARGET=0` prints "target frame rate left as the game sets it",
 where the profile alone prints "target frame rate 30 → 60 fps".

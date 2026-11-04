@@ -695,37 +695,48 @@ as a regression. If the cutscene pacing is ever judged worth fixing, the lever i
 (there is only 0.3 ms of host overhead in a 20 ms overrun) but running those scenes at the game's own 30,
 which is a front-end feature, not a bring-up fix.
 
-### 14j1. Correction: `fps_target 60` runs the game at **double speed**
+### 14j1. `fps_target`: why a "Game default" choice exists, and what is still unresolved
 
-The advice above — "keep `fps_target 60`" — was wrong on a point that only showed up in play. This engine
-stores a target rate and **steps by `60 / target` every frame**:
+Writing 60 over the game's own 30 is the case this section is about. **Whether it changes game speed is
+UNRESOLVED**, and the two halves of the evidence point different ways — recorded here rather than settled
+by preference.
+
+**Against a speed change** (this is what the code says): the engine steps by `60 / target` every frame, so
+60 fps presents twice as many frames each stepping half as far.
 
 ```c
 // hle_fpslock.c: gxc holds the target at +0x1dc; "at 60 the game asks for interval 1 and steps by 1.0 a frame"
 ```
 
-The game ships with **60 in menus and 30 in battle**. Writing 60 over its own 30 makes it present 60 frames
-a second while stepping each of them as if a frame were 1/60 s — so **battle, and everything that runs on
-the same clock, advances at 2× the console's rate**. A player noticed it before any log did ("整体应该都快").
-Upstream documents the identical failure on another fixed-step title:
+60 fps × 1.0 = 60 units a second; 30 fps × 2.0 = 60 units a second. And this is exactly the mechanism the
+public 60 fps repack uses to get *"60 fps without speedup"* (§14p): it writes 60 into the same field. By
+that reading, `fps_target 60` **is** "60 fps without speedup", and the host's own comment is right.
 
-> presenting at a cap the game does not step by runs a fixed-step game fast or slow
-> (Tears of the Kingdom 1.4.2 at 2x with DM_FPS_TARGET=60)
+**For a speed change** (this is what playing said): a player reported the whole game feeling faster on the
+`60` setting ("整体应该都快"). That is one subjective observation, taken before this analysis existed, and it
+is the only evidence for it.
 
-So the earlier table's "60 fps, measured 60.0, no drops" was accurate as a *frame rate* and misleading as a
-*verdict*: a smooth 60 fps was being read as "better", when at this engine it means "wrong speed for
-battle".
+**Upstream has not measured it either** — its notes for this title say so outright:
 
-**What changed:** `dm/games/settings.tsv`'s Frame rate row gains a **Game default** choice (`0`), and it is
-now the row's default:
+> **Not measured:** game speed at 60 against 30 over the same route (the player saw battles at 60 with
+> nothing reported fast).
 
-| choice | menus | battle | speed |
+**So this is an open question, not a finding.** The test that settles it costs about ten minutes and needs
+no code: run the same press route at `0` and at `60` with `DM_FS=1`, and compare the *wall-clock* timestamps
+at which the same layout archives load. Same timestamps = no speed change; earlier = faster. Until that is
+run, neither this file nor a commit message should claim either way.
+
+**What did change, and why it stands on its own:** `dm/games/settings.tsv`'s Frame rate row gained a
+**Game default** choice (`0` = leave the game's own rate), and it is now the row's default:
+
+| choice | menus | battle | note |
 |---|---|---|---|
-| **Game default** | 60 | 30 | as on the console |
-| 30 fps | 30 | 30 | correct, menus half as smooth |
-| 60 fps | 60 | 60 | **2× fast** |
+| **Game default** | 60 | 30 | what the console does |
+| 30 fps | 30 | 30 | menus half as smooth, nothing else |
+| 60 fps | 60 | 60 | smoother; speed unresolved (above) |
 
-Verified from the host's own log, not inferred:
+That is defensible whatever the speed question resolves to: "use the game's own rate" is the honest default
+for a title whose two modes differ, and a player can still pick 60. Verified from the log, not inferred:
 
 ```
 DM_FPS_TARGET=0   →  main: target frame rate left as the game sets it (DM_FPS_TARGET)

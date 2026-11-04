@@ -18,9 +18,10 @@ patch from the tree and keep it here.
 
 ### 0a. Frame rate: a **Game default** choice, and it is now the default — **applied**
 
-`fps_target 60` ran this game at **double speed**. The engine steps by `60 / target` each frame and ships
-with 60 in menus and 30 in battle, so overwriting its 30 with 60 presents 60 frames a second while stepping
-each as 1/60 s. A player noticed before any measurement did. Fixed by adding a `0` (leave the game's own
+Whether `fps_target 60` changes this game's **speed** is unresolved. The engine steps by `60 / target` each
+frame and ships with 60 in menus and 30 in battle, so by the code 60 fps presents twice as many frames each
+stepping half as far — the same mechanism the public 60 fps repack uses for "60 fps without speedup". But a
+player reported the game feeling faster, and nobody has measured it (upstream lists it as not measured). Fixed by adding a `0` (leave the game's own
 rate) choice to the Frame rate row in `dm/games/settings.tsv` and making it the row's default; `0` is
 already a supported value (`hle_fpslock.c`: "0 = leave the game's own limit"), verified from the log —
 `DM_FPS_TARGET=0` prints "target frame rate left as the game sets it".
