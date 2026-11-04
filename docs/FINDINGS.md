@@ -507,9 +507,9 @@ first list may simply have been generated before the game's first update. **Stat
 priority** — it has not reproduced in any run since, and when it did occur the audio *renderer* still
 initialised. Worth a second look only if a run goes silent.
 
-**Graphics: `stage 1 cb4 has no uniform buffer bound` — reproducible in deeper scenes.** It appears in
-the runs that get past the opening (character creation and beyond) and not in the ones that sit on a
-menu. It now names its shader (the message was extended to do so):
+**Graphics: `stage 1 cb4 has no uniform buffer bound` — reproducible in deeper scenes, and answered by
+upstream as not a bug.** It appears in the runs that get past the opening (character creation and beyond)
+and not in the ones that sit on a menu. It now names its shader (the message was extended to do so):
 
 ```
 [dm] [nvn-mtl] [RED] stage 1 cb4 has no uniform buffer bound (shader 300c5dd0fd84cf79_b, 28 bindings)
@@ -521,18 +521,15 @@ effect, `var2` variant. The host substitutes the all-zero bank and continues, as
 texture slot; no picture defect was found on the frames it appears on (no magenta, no visible artefact
 in §14a's checks).
 
-Two candidate causes, not yet separated:
+This section originally listed two candidate causes — the game relying on stale binding state, or the
+host dropping a bind. **The second is ruled out by upstream**, which has the exact symptom documented in
+[An unbound uniform slot reads the zero bank](https://github.com/seedds/nxnative/blob/main/docs/reference/rendering.md#an-unbound-uniform-slot-reads-the-zero-bank):
+"the game draws with nothing bound there; **the host misses no bind**". The zero bank is the intended
+stand-in and is present in this tree. See §14j.
 
-1. **the game relies on stale binding state** — NVN constant-buffer bindings persist across draws, and
-   the host models that (`S.ubo` only changes on a real bind command), so if the game never binds cb4
-   for this draw it would be reading whatever the previous draw left. The host's zero bank is then the
-   *wrong* stand-in, and the fix is to reuse the previous binding rather than zero it;
-2. **the host drops a bind** — the game does bind cb4, and the binding is lost between the bind and the
-   draw (a pass split, a deferred update, or replayed command ordering).
-
-Separating them needs `DM_NVN_PASSDUMP` on a run that reaches a particle effect, reading whether a
-`B … st1 cb reg4` line exists before the draw that reports the miss. **Status: open**, with the shader
-and the asset path now recorded so the next session starts from here.
+**Status: not a defect.** The one thing still genuinely unknown is what the Switch reads from an
+unbound slot, which upstream also records as unknown; if a particle ever looks wrong here, that is the
+question to ask, not whether a bind went missing.
 
 ### 14h. `write-protection faults` is not zero, and that is correct
 
@@ -584,27 +581,96 @@ ship (`V_JP` 3.2 GB, `V_EN` 2.8 GB) and the host does not choose: it passes `DM_
 Japanese voice with localised text, and it means a voice check must compare against the Japanese
 original, not the English one.
 
-### 14f. One `[RED]` line in this path, and it is audio
+### 14j. What upstream and the sibling forks already know (surveyed 2026-11-04)
+
+The `nxnative` ecosystem turned out to hold the answers to three of the open items. Read before
+re-deriving anything here.
+
+**The best reference is Donkey Kong Bananza, `040074A01BF12000`** — upstream's one shipped Switch 2
+profile (`dm/games/040074A01BF12000/`), same generation as this title, built from a dump folder the same
+way, SDK 20.5.19 / NVN2 / Ampere shaders. Its README is a step-by-step bring-up log and is worth reading
+in full. Of the settings it needs, checked against ours:
+
+| DKB setting | why DKB needs it | does this title need it? |
+|---|---|---|
+| `sys_resource 0x0` | its NPDM declares no system resource, so virtual address memory is off and the game sets a heap | **no** — our NPDM declares 64 MB and our profile already sets `0x4000000` |
+| `app_pool 0x240000000` (9 GB) | Switch 2 leaves games 9 GB; with a 3.2 GB pool its `AudioSystemHeap` creation returned null | **already set** |
+| `render_cond on` | agl wraps clears in `SetRenderEnableConditional`; drawn unconditionally, the composite was wiped before the upscaler read it and **every gameplay frame came out black** | **no** — this game never calls `SetRenderEnable*` at all (0 calls in every run), so the key is inert here |
+| `gpu_timestamps segment` | its frame-rate controller and dynamic resolution read GPU time between timestamp reports; with one time per submission they read ~0 and it held 2304x1296 at 14 ms over budget | **measured: no effect** — see below |
+
+**`gpu_timestamps`: tested, no difference.** This game does report 60 counters a frame
+(`CommandBufferReportCounter=60`) and does flip its present interval 1 ↔ 2, which is the shape that made
+`segment` necessary for DKB. An A/B on identical runs (80 s each, same presses) shows the same behaviour
+either way: present interval changes `1→2` and `2→1` in both, frame time p50 16.66 → 21.19 ms
+(submission) vs 16.65 → 21.89 ms (segment), crop 2048x1152 unchanged, 0 `[RED]` in both. The interval
+flip here happens once near startup, not as a continuous controller, so the setting stays at the default.
+
+**The `cb4` line is a documented non-bug.** Upstream has an entry for exactly this symptom —
+[An unbound uniform slot reads the zero bank](https://github.com/seedds/nxnative/blob/main/docs/reference/rendering.md#an-unbound-uniform-slot-reads-the-zero-bank)
+— and its **Cause** rules out the second candidate §14g listed:
+
+> the argument buffer kept a null pointer for the unbound slot. **The game draws with nothing bound
+> there; the host misses no bind.** What the Switch reads from an unbound slot is not known.
+> **Fix:** the slot now reads the all-zero bank, as an unbound texture slot reads the zero texture.
+
+The fix is present in this tree (`zero_bank_gpu()`, `nvn_mtl.m`). So the message is the host **reporting**
+a state the game put it in, not a dropped bind. **Status changes from "two candidate causes" to
+resolved-by-upstream**: keep the zero bank, and treat a picture defect near those draws as a separate
+question about what the Switch really reads from an unbound slot — which upstream records as unknown.
+The value of the shader name added in §14g stands: it says this is the particle effect
+(`/Effect/Particle/FieldBtl200.ptcl`, variant `var2`), i.e. a title that leaves a slot unbound for
+particles.
+
+**Other forks worth knowing** (all MIT, all built on the same host):
+
+- `robldctrl/nxnative-pokopia` — another Switch 2 title (Pokopia). Its additions are Switch 2 **KTGL**
+  shader support (GLSLC v2, LINKDATA, runtime-captured shaders), Ampere translator fixes (MEMBAR,
+  ERRBAR, ATOMS, BREV, `.X4` shared-memory scaling, predicated variable-latency loads, 1D fetches of 2D
+  textures), and a 9 GB pool. Not applicable to this title's engine (NintendoWare, not KTGL), but the
+  translator fixes are the same subsystem ours runs through.
+- `ltomo2/nxnative-tv-builder` — tvOS work listing **BC texture fallback** and per-game memory adapters.
+  The BC fallback matters for the iPhone target, whose GPUs need iOS 26+/A17 Pro for BC textures
+  (upstream README states this); worth reading before the packaging step.
+- `imnotsharingmyname/nxnative-fc26-120fps` — EA SPORTS FC 26 profile and 120 fps mode, i.e. another
+  **SDK 22.2.0** title, the same SDK generation as this one. The closest neighbour for SDK 22 object
+  layouts.
+
+Upstream issue [#919 "Switch 2 Edition Support"](https://github.com/seedds/nxnative/issues/919) is open
+and reports that Switch 2 *Edition* titles (a Switch 1 game plus a Switch 2 upgrade) only run their
+Switch 1 version. This title is a native Switch 2 release, not an Edition, so it does not apply — noted
+so nobody re-treads it.
+
+Driving the opening with an adaptive press plan (A mostly, a `Down` and a `B` cycled in so a cursor that
+ignores A still moves) got further than the plain A loop: the fourth layout loaded.
 
 ```
-[dm] audren: command headers in the SDK 21 layout (no magic: +0 enabled, +1 command ID, +2 size), DeviceSink 0x140 bytes
-[dm] [RED] audren: no DeviceSink (ID 0x14) in the command list, 0 commands of 0x140 bytes: the game will have no sound
+layout load order: Common -> CommonMenu -> Hub -> Gmap
 ```
 
-The game's audio command list has no DeviceSink command, so the host cannot find the sink object. This
-matches the known-largest gap (`nn::audio`, 212 imports, §6) and belongs to PLAN step 3; it is recorded
-here because it is the only `[RED]` the picture path produced, and it is not a graphics problem.
+`Gmap.arc` is the world map — new ground, and proof the engine survives the whole prologue into the
+chapter flow. `Battle.arc`, `Title.arc` and `Ending.arc` were still never opened, so tactical gameplay
+and the title screen remain unreached.
 
-One graphics `[RED]` was seen once, on a frame that compiled 8 new pipelines and uploaded 672 textures:
+**The `Gmap` transition looks alarming and is not.** At the hand-off the frame is solid black except one
+small circular icon in the bottom-right corner (28,782 non-black pixels, 8,371 colours) — exactly the
+"全屏黑" shape worth being suspicious of. Sampled 2 s later, the same screen holds **557,800 non-black
+pixels and 48,626 colours**, and the pixels *changed* (559,359 of them) between samples. The log explains
+it:
 
 ```
-[dm] [nvn-mtl] [RED] stage 1 cb4 has no uniform buffer bound
-[dm] [longframe] frame 9030 (154.28 s) … new pipelines 8 + shader libraries 0, 56.3 ms in all; texture uploads 672 first …
+fs open [210.06s] Contents:/Movie/Product/MV00_05.webm
+fs open [210.59s] Contents:/Sound/stream/V_JP/V/JP/MV00/05/V_JP_MV00_05.opus
+[movie] AV1: VideoToolbox decoding 2560x1440, profile 0 level 12
+[codec] image pool 2560x1440 format 2, tiling or mode 2, 1 picture(s): the host keeps the decoded pictures
 ```
 
-It is `RED_ONCE(16)` in `nvn_mtl.m`'s binding path: the shader reads constant buffer 4, the game has not
-bound one there, and the host substitutes the all-zero bank (as an unbound texture slot reads 0). No
-picture defect was visible on those frames. **Open**: whether the game expects a buffer there and the
-bind was dropped, or the shader legitimately reads an unbound slot. Worth one pass with
-`DM_NVN_PASSDUMP` on that shader if a visual fault ever appears near those draws.
+It is a movie hand-off: the decoder has been initialised, the first picture is in, and the frame arrives
+within two seconds. **No layer is missing** — this is the game's own blue-flame interlude (§14a's frame
+list has it as "a light-figure on a tiled floor"). A black frame between movies is what the game does.
 
+**One detail worth knowing before any audio comparison:** the voice stream is the **Japanese** one —
+`Sound/stream/V_JP/…V_JP_MV00_05.opus` — while the UI is the Chinese `zh-Hans` build. Both voice sets
+ship (`V_JP` 3.2 GB, `V_EN` 2.8 GB) and the host does not choose: it passes `DM_LANG` through
+`oe::GetDesiredLanguage` and the *game* picks the voice track. That matches the series' habit of fixed
+Japanese voice with localised text, and it means a voice check must compare against the Japanese
+original, not the English one.

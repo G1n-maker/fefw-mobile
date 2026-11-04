@@ -62,6 +62,23 @@ separate pull requests if they go upstream.
 3. [`docs/PORTING-WORKFLOW.md`](docs/PORTING-WORKFLOW.md) — the procedure, with the traps that cost
    hours in the previous project.
 
+**Before re-deriving a graphics or boot behaviour, check upstream's notes.** `nxnative/docs/reference/`
+has a per-symptom entry (Symptom / Cause / Fix / Found on) for most things this title can hit, and
+`docs/agents/symptoms.md` is the index to search by the log line you are looking at. The closest
+neighbours to read first:
+
+- `dm/games/040074A01BF12000/` — **Donkey Kong Bananza**, upstream's one shipped Switch 2 profile, with a
+  step-by-step bring-up README. Same generation, same dump-folder packing.
+- `imnotsharingmyname/nxnative-fc26-120fps` — another **SDK 22.2.0** title, i.e. the same SDK generation,
+  so its profile is the nearest reference for SDK 22 object layouts.
+- `robldctrl/nxnative-pokopia` — the other Switch 2 fork; its Ampere translator fixes are the subsystem
+  this title's 16,888 shaders go through.
+- `ltomo2/nxnative-tv-builder` — BC texture fallback and per-game memory adapters, which matter for the
+  iPhone target before packaging.
+
+[FINDINGS §14j](docs/FINDINGS.md) records which of DKB's settings this title does and does not need, each
+with the measurement.
+
 ## Facts established before any code was written
 
 All from the modules as they arrived, no guessing:
