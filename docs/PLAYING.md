@@ -234,10 +234,23 @@ The parts a screenshot cannot judge:
 
 ## If the app will not start
 
-**Expect a "verifying" window the first time a fresh build is opened**, and after any change that re-signs
-the app. macOS hashes the bundle before running it, and this one carries 27 GB of game data, so the wait is
-proportional to that — roughly 10–30 seconds on a fast disk. It is not loading game resources: the game
-process does not exist yet, and the log has not been created. Pressing Play is the *next* step, after this.
+**A "verifying" window may appear once after a fresh build.** It is macOS checking the bundle before
+running it, and it is not loading game resources — the game process does not exist yet and the log has not
+been created. Measured here it takes **about 10 s** for the whole 29 GB (`codesign --verify --deep`, 58,479
+files), and the app then starts in **~2 s**.
+
+**If that window sits at 100% with its close button greyed out for more than a few minutes, it is stuck, and
+killing it fixes it** — the app then starts immediately:
+
+```bash
+kill -9 $(pgrep CoreServicesUIAgent)
+```
+
+`killall` does **not** work: the agent ignores `SIGTERM`. `-9` does, and launchd restarts it on demand, so
+nothing else is affected and no restart is needed. Seen here after four repacks in one evening: the agent
+had been showing one dialog since two days earlier, waiting for a result that could no longer arrive
+because the app had been re-signed underneath it. A greyed-out close button is by design while verifying —
+the window is meant to dismiss itself, so a stale one can only be cleared this way.
 
 The same applies to the settings window's own `Play`: it starts the host, and from there ~20 seconds is
 the game genuinely loading (modules, shader libraries, first texture uploads). That part is real work and
