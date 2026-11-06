@@ -4,7 +4,7 @@
 它描述的是 [nxnative](https://github.com/seedds/nxnative) 那条路线的完整流程：**原生执行**，不是模拟器。
 
 文中所有 "Cross Rays" 的具体数字都是**真实验证过的基准**，来自
-[G1n-maker/crossrays-mobile](https://github.com/G1n-maker/crossrays-mobile)——那个项目从零到双端可玩用了约 16 小时。
+[G1n-maker/crossrays-nx-native](https://github.com/G1n-maker/crossrays-nx-native)——那个项目从零到双端可玩用了约 16 小时。
 它们留在这里是为了对照：当新游戏的某个数字和这些基准差很远时，那就是要小心的地方。
 
 > 前提认知：游戏自己的 ARM64 代码直接在 Apple 芯片上跑，只有 Apple 内核跑不了的指令被重写

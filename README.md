@@ -100,7 +100,7 @@ still playing are eaten by the dialogue.
 ## The host this builds on
 
 [nxnative](https://github.com/seedds/nxnative) — the same project used for
-[Cross Rays](https://github.com/G1n-maker/crossrays-mobile). Upstream already ships one Switch 2 title
+[Cross Rays](https://github.com/G1n-maker/crossrays-nx-native). Upstream already ships one Switch 2 title
 (**Donkey Kong Bananza**, `040074A01BF12000`) and its bring-up README is the closest reference this
 project has; **EA SPORTS FC 27** is the nearest SDK 22.2.0 neighbour. `docs/FINDINGS.md` §14m records
 which of their profile settings this title does and does not need, each with the measurement.

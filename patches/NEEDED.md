@@ -105,7 +105,7 @@ Four files. Only needed once the game draws; harmless before.
   changing only the Metal viewport does nothing.
 
 The full versions of all four are in the Cross Rays repository,
-[G1n-maker/crossrays-mobile](https://github.com/G1n-maker/crossrays-mobile) under `patches/`.
+[G1n-maker/crossrays-nx-native](https://github.com/G1n-maker/crossrays-nx-native) under `patches/`.
 
 ### 3. Touch shoulder keys reaching the edge
 
